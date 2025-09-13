@@ -12,8 +12,11 @@
 #define __SLICE_H__
 
 #include <assert.h>
+#include <ctype.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,23 +41,55 @@
 #define OPTVAL(T, V) ((OPT(T)) { .ok = true, .value = (V) })
 #define OPTNULL(T) ((OPT(T)) { 0 })
 
-#define UNWRAP(T, V)		   \
-    (                              \
-        {                          \
-            opt_##T __value = (V); \
-            assert(__value.ok);    \
-            __value.value;         \
+#define UNWRAP_T(T, Expr)                            \
+    (                                                \
+        {                                            \
+            T __value = (Expr);                      \
+            if (!__value.ok) {                       \
+                fprintf(stderr, #Expr " is null\n"); \
+                abort();                             \
+            }                                        \
+            (__value.value);                         \
         })
 
-#define ORELSE(T, V, E)			      \
+#define UNWRAP(T, Expr) UNWRAP_T(opt_##T, (Expr))
+
+#define ORELSE_T(T, V, E)                     \
     (                                         \
         {                                     \
-            opt_##T __val = (V);              \
+            T __val = (V);                    \
             ((__val.ok) ? __val.value : (E)); \
         })
 
+#define ORELSE(T, V, E) ORELSE_T(opt_##T, (V), (E))
+
+#define TRYOPT_T(T, V)            \
+    (                             \
+        {                         \
+            T __val = (V);        \
+            if (!__val.ok) {      \
+                return (T) { 0 }; \
+            }                     \
+            (__val.value);        \
+        })
+
+#define TRYOPT(T, V) TRYOPT_T(opt_##T, (V))
+
+#define TRYOPT_ADAPT_T(T, V, Ret) \
+    (                             \
+        {                         \
+            T __val = (V);        \
+            if (!__val.ok) {      \
+                return (Ret);     \
+            }                     \
+            (__val.value);        \
+        })
+
+#define TRYOPT_ADAPT(T, V, Ret) \
+    TRYOPT_ADAPT_T(opt_##T, (V), (Ret))
+
 #define RES(T, E)      \
-    struct {	       \
+    struct {           \
         bool ok;       \
         union {        \
             T success; \
@@ -62,10 +97,37 @@
         };             \
     }
 
-#define RESVAL(T, V) (T) { .ok = true, .success = (V) }
-#define RESERR(T, E) (T) { .ok = false, .error = (E) }
+#define RESVAL(T, V) \
+    (T) { .ok = true, .success = (V) }
+#define RESERR(T, E) \
+    (T) { .ok = false, .error = (E) }
 
+#define TRY(T, Expr)          \
+    (                         \
+        {                     \
+            T __res = (Expr); \
+            if (!__res.ok) {  \
+                return __res; \
+            }                 \
+            (__res.success);  \
+        })
+
+#define MUST(T, Expr)                               \
+    (                                               \
+        {                                           \
+            T __res = (Expr);                       \
+            if (!__res.ok) {                        \
+                fprintf(stderr, #Expr " failed\n"); \
+                abort();                            \
+            }                                       \
+            (__res.success);                        \
+        })
+
+OPTDEF(int);
 OPTDEF(size_t);
+OPTDEF(long);
+typedef unsigned long ulong;
+OPTDEF(ulong);
 
 typedef struct slice {
     char  *items;
@@ -82,6 +144,9 @@ typedef struct array {
 #define slice_make(s, l) ((slice_t) { .items = (s), .len = (l) })
 #define slice_from_cstr(s) ((slice_t) { .items = ((char *) s), .len = strlen((s)) })
 #define C(s) slice_from_cstr(s)
+#define slice_is_cstr(s) ((s).items[(s).len] == '\0')
+#define SL "%.*s"
+#define SLARG(s) (int) (s).len, (s).items
 
 slice_t    slice_head(slice_t slice, size_t from_back);
 slice_t    slice_first(slice_t slice, size_t num);
@@ -99,6 +164,8 @@ opt_size_t slice_last_indexof(slice_t haystack, char needle);
 opt_size_t slice_first_of(slice_t haystack, slice_t needles);
 int        slice_cmp(slice_t s1, slice_t s2);
 bool       slice_eq(slice_t s1, slice_t s2);
+opt_ulong  slice_to_ulong(slice_t s, unsigned int base);
+opt_long   slice_to_long(slice_t s, unsigned int base);
 
 #endif /* __SLICE_H__ */
 
@@ -123,7 +190,7 @@ slice_t slice_tail(slice_t slice, size_t from_start)
 {
     if (from_start > slice.len) {
         return C("");
-    }        
+    }
     return slice_make(slice.items + from_start, slice.len - from_start);
 }
 
@@ -245,6 +312,112 @@ int slice_cmp(slice_t s1, slice_t s2)
 bool slice_eq(slice_t s1, slice_t s2)
 {
     return slice_cmp(s1, s2) == 0;
+}
+
+opt_int digit_for_base(unsigned int digit, unsigned int base)
+{
+    if (digit >= '0' && digit < '0' + base) {
+        return OPTVAL(int, digit - '0');
+    } else if (digit >= 'A' && digit < 'A' + (base - 10)) {
+        return OPTVAL(int, 10 + digit - 'A');
+    } else if (digit >= 'a' && digit < 'a' + (base - 10)) {
+        return OPTVAL(int, 10 + digit - 'a');
+    }
+    return (opt_int) { 0 };
+}
+
+opt_ulong slice_to_ulong(slice_t s, unsigned int base)
+{
+    if (s.len == 0) {
+        return (opt_ulong) { 0 };
+    }
+
+    size_t ix = 0;
+    while (ix < s.len && isspace(s.items[ix])) {
+        ++ix;
+    }
+    if (ix == s.len) {
+        return (opt_ulong) { 0 };
+    }
+
+    if (s.len > ix + 2 && s.items[ix] == '0') {
+        if (s.items[ix + 1] == 'x' || s.items[ix + 1] == 'X') {
+            if (base != 0 && base != 16) {
+                return (opt_ulong) { 0 };
+            }
+            base = 16;
+            ix = 2;
+        }
+        if (s.items[ix + 1] == 'b' || s.items[ix + 1] == 'B') {
+            if (base != 0 && base != 2) {
+                return (opt_ulong) { 0 };
+            }
+            base = 2;
+            ix = 2;
+        }
+    }
+    if (base == 0) {
+        base = 10;
+    }
+    if (base > 36) {
+        return (opt_ulong) { 0 };
+    }
+
+    size_t first = ix;
+    ulong  val = 0;
+    while (ix < s.len) {
+        opt_int d = digit_for_base(s.items[ix], base);
+        if (!d.ok) {
+            break;
+        }
+        val = (val * base) + d.value;
+        ++ix;
+    }
+    if (ix == first) {
+        return (opt_ulong) { 0 };
+    }
+    while (ix < s.len && isspace(s.items[ix])) {
+        ++ix;
+    }
+    if (ix < s.len) {
+        return (opt_ulong) { 0 };
+    }
+    return OPTVAL(ulong, val);
+}
+
+opt_long slice_to_long(slice_t s, unsigned int base)
+{
+    if (s.len == 0) {
+        return (opt_long) { 0 };
+    }
+
+    size_t ix = 0;
+    while (ix < s.len && isspace(s.items[ix])) {
+        ++ix;
+    }
+    if (ix == s.len) {
+        return (opt_long) { 0 };
+    }
+    long    sign = 1;
+    slice_t tail = slice_tail(s, ix);
+    if (s.len > ix + 1 && (s.items[ix] == '-' || s.items[ix] == '+')) {
+        sign = s.items[ix] == '-' ? -1 : 1;
+        tail = slice_tail(s, ix + 1);
+    }
+    opt_ulong val = slice_to_ulong(tail, base);
+    if (!val.ok) {
+        return (opt_long) { 0 };
+    }
+    if (sign == 1) {
+        if (val.value > (ulong) LONG_MAX) {
+            return (opt_long) { 0 };
+        }
+        return OPTVAL(long, ((long) val.value));
+    }
+    if (val.value > ((ulong) (-(LONG_MIN + 1))) + 1) {
+        return (opt_long) { 0 };
+    }
+    return OPTVAL(long, ((long) (~val.value + 1)));
 }
 
 #endif /* SLICE_IMPLEMENTED */

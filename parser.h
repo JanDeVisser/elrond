@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "operators.h"
-#include "lexer.h"
 #include "node.h"
+#include "elrondlexer.h"
+#include "operators.h"
 #include "slice.h"
 
 #ifndef __PARSER_H__
@@ -20,5 +20,6 @@ typedef struct _parser {
 } parser_t;
 
 parser_t parse(slice_t text);
+void     parser_print(parser_t *parser);
 
 #endif /* __PARSER_H__ */

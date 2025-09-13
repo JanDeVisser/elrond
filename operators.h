@@ -5,63 +5,10 @@
  */
 
 #include "slice.h"
+#include "elrondlexer.h"
 
 #ifndef __OPERATORS_H__
 #define __OPERATORS_H__
-
-typedef enum {
-    KW_AssignAnd,
-    KW_AssignDecrement,
-    KW_AssignDivide,
-    KW_AssignIncrement,
-    KW_AssignModulo,
-    KW_AssignMultiply,
-    KW_AssignOr,
-    KW_AssignShiftLeft,
-    KW_AssignShiftRight,
-    KW_AssignXor,
-    KW_Break,
-    KW_Cast,
-    KW_Const,
-    KW_Continue,
-    KW_Defer,
-    KW_Else,
-    KW_Embed,
-    KW_Enum,
-    KW_Equals,
-    KW_Error,
-    KW_False,
-    KW_ForeignLink,
-    KW_For,
-    KW_Func,
-    KW_GreaterEqual,
-    KW_If,
-    KW_Import,
-    KW_Include,
-    KW_LessEqual,
-    KW_LogicalAnd,
-    KW_LogicalOr,
-    KW_Loop,
-    KW_NotEqual,
-    KW_Null,
-    KW_Public,
-    KW_Range,
-    KW_Return,
-    KW_ShiftLeft,
-    KW_ShiftRight,
-    KW_Sizeof,
-    KW_Struct,
-    KW_True,
-    KW_Var,
-    KW_While,
-    KW_Yield,
-} elrondkeyword_t;
-
-extern slice_t elrond_keywords[];
-
-#define keywordcode elrondkeyword_t
-#define keywords elrond_keywords
-#include "lexer.h"
 
 typedef int precedence_t;
 
@@ -125,49 +72,55 @@ typedef enum {
     AO_AssignXor,
 } assignment_operator_t;
 
-typedef enum {
-    OP_Add,
-    OP_AddressOf,
-    OP_Assign,
-    OP_AssignAnd,
-    OP_AssignDecrement,
-    OP_AssignDivide,
-    OP_AssignIncrement,
-    OP_AssignModulo,
-    OP_AssignMultiply,
-    OP_AssignOr,
-    OP_AssignShiftLeft,
-    OP_AssignShiftRight,
-    OP_AssignXor,
-    OP_BinaryAnd,
-    OP_BinaryInvert,
-    OP_BinaryOr,
-    OP_BinaryXor,
-    OP_Call,
-    OP_Cast,
-    OP_Divide,
-    OP_Equals,
-    OP_Greater,
-    OP_GreaterEqual,
-    OP_Idempotent,
-    OP_Length,
-    OP_Less,
-    OP_LessEqual,
-    OP_LogicalAnd,
-    OP_LogicalInvert,
-    OP_LogicalOr,
-    OP_MemberAccess,
-    OP_Modulo,
-    OP_Multiply,
-    OP_Negate,
-    OP_NotEqual,
-    OP_Range,
-    OP_Sequence,
-    OP_ShiftLeft,
-    OP_ShiftRight,
-    OP_Sizeof,
-    OP_Subscript,
-    OP_Subtract,
+#define OPERATORS(S)    \
+    S(Add)              \
+    S(AddressOf)        \
+    S(Assign)           \
+    S(AssignAnd)        \
+    S(AssignDecrement)  \
+    S(AssignDivide)     \
+    S(AssignIncrement)  \
+    S(AssignModulo)     \
+    S(AssignMultiply)   \
+    S(AssignOr)         \
+    S(AssignShiftLeft)  \
+    S(AssignShiftRight) \
+    S(AssignXor)        \
+    S(BinaryAnd)        \
+    S(BinaryInvert)     \
+    S(BinaryOr)         \
+    S(BinaryXor)        \
+    S(Call)             \
+    S(Cast)             \
+    S(Divide)           \
+    S(Equals)           \
+    S(Greater)          \
+    S(GreaterEqual)     \
+    S(Idempotent)       \
+    S(Length)           \
+    S(Less)             \
+    S(LessEqual)        \
+    S(LogicalAnd)       \
+    S(LogicalInvert)    \
+    S(LogicalOr)        \
+    S(MemberAccess)     \
+    S(Modulo)           \
+    S(Multiply)         \
+    S(Negate)           \
+    S(NotEqual)         \
+    S(Range)            \
+    S(Sequence)         \
+    S(ShiftLeft)        \
+    S(ShiftRight)       \
+    S(Sizeof)           \
+    S(Subscript)        \
+    S(Subtract)
+
+typedef enum _operator {
+#undef S
+#define S(O) OP_##O,
+    OPERATORS(S)
+#undef S
 } operator_t;
 
 typedef struct _operator_def {
@@ -192,6 +145,7 @@ typedef struct _binding_power {
 #define OPERATORS_SZ 39
 
 extern operator_def_t  operators[];
+extern char const     *operator_name(operator_t op);
 extern binding_power_t binding_power(operator_def_t op);
 
 #endif /* __OPERATORS_H__ */
@@ -288,6 +242,20 @@ operator_def_t operators[OPERATORS_SZ] = {
     { .op = OP_Subscript, .kind = TK_Symbol, .sym = ']', .precedence = 15, .position = POS_Closing },
     { .op = OP_Subtract, .kind = TK_Symbol, .sym = '-', .precedence = 11 },
 };
+
+char const *operator_name(operator_t op)
+{
+    switch (op) {
+#undef S
+#define S(O)     \
+    case OP_##O: \
+        return #O;
+        OPERATORS(S)
+#undef S
+    default:
+        UNREACHABLE();
+    }
+}
 
 binding_power_t binding_power(operator_def_t op)
 {

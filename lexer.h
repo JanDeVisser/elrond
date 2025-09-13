@@ -90,10 +90,10 @@ typedef enum {
 } commenttype_t;
 
 typedef enum {
-    NT_Integer,
-    NT_Decimal,
-    NT_HexNumber,
-    NT_BinaryNumber,
+    NUM_Integer,
+    NUM_Decimal,
+    NUM_HexNumber,
+    NUM_BinaryNumber,
 } numbertype_t;
 
 typedef struct _tokenlocation {
@@ -209,9 +209,10 @@ extern stringscanner_t default_quotes;
 extern stringscanner_t single_double_quotes;
 extern scannerpack_t   c_style_comments;
 extern scannerpack_t   c_scanner_pack;
+extern scanner_def_t   c_scanner;
 extern slice_t         no_keywords[];
 
-typedef char const *string_t;
+// typedef char const *string_t;
 
 typedef enum {
     LE_UnexpectedKeyword,
@@ -222,9 +223,10 @@ typedef enum {
 typedef RES(token_t, lexererror_t) lexerresult_t;
 
 typedef struct _lexer {
-    DA(token_t) tokens;
-    slice_t     buffer;
-    size_t      cursor;
+    DA(token_t)
+    tokens;
+    slice_t buffer;
+    size_t  cursor;
 } lexer_t;
 
 extern char const      *tokenkind_name(tokenkind_t kind);
@@ -241,10 +243,10 @@ extern token_t          token_make_string(quotetype_t type, bool terminated, boo
 extern token_t          token_make_symbol(char symbol);
 extern token_t          token_make_tab();
 extern token_t          token_make_whitespace();
-extern bool             token_matches(token_t *token, tokenkind_t k);
-extern bool             token_matches_symbol(token_t *token, char symbol);
-extern bool             token_matches_keyword(token_t *token, keywordcode_t kw);
-extern bool             token_is_identifier(token_t *token);
+extern bool             token_matches(token_t token, tokenkind_t k);
+extern bool             token_matches_symbol(token_t token, char symbol);
+extern bool             token_matches_keyword(token_t token, keywordcode_t kw);
+extern bool             token_is_identifier(token_t token);
 extern scanresult_t     make_token_result(token_t token, size_t matched);
 extern scanresult_t     make_buffer_result(char const *buffer, size_t matched);
 extern scanresult_t     make_skip_result(size_t skip, size_t matched);
@@ -275,6 +277,8 @@ extern bool             lexer_exhausted(lexer_t *lexer);
 extern bool             lexer_matches_keyword(lexer_t *lexer, keywordcode_t keyword);
 extern bool             lexer_matches_symbol(lexer_t *lexer, int sym);
 extern bool             lexer_matches(lexer_t *lexer, tokenkind_t kind);
+extern bool             lexer_has_lookback(lexer_t *, size_t);
+extern token_t          lexer_lookback(lexer_t *, size_t);
 
 #endif /* __LEXER_H__ */
 
@@ -461,22 +465,22 @@ token_t token_make_whitespace()
     };
 }
 
-bool token_matches(token_t *token, tokenkind_t k)
+bool token_matches(token_t token, tokenkind_t k)
 {
-    return token->kind == k;
+    return token.kind == k;
 }
 
-bool token_matches_symbol(token_t *token, char symbol)
+bool token_matches_symbol(token_t token, char symbol)
 {
-    return token_matches(token, TK_Symbol) && token->symbol == symbol;
+    return token_matches(token, TK_Symbol) && token.symbol == symbol;
 }
 
-bool token_matches_keyword(token_t *token, keywordcode_t kw)
+bool token_matches_keyword(token_t token, keywordcode_t kw)
 {
-    return token_matches(token, TK_Keyword) && token->keyword == kw;
+    return token_matches(token, TK_Keyword) && token.keyword == kw;
 }
 
-bool token_is_identifier(token_t *token)
+bool token_is_identifier(token_t token)
 {
     return token_matches(token, TK_Identifier);
 }
@@ -529,7 +533,7 @@ opt_scanresult_t linecomment(void *ctx, slice_t buffer)
     size_t ix = config->marker.len;
     for (; ix < buffer.len && buffer.items[ix] != '\n'; ++ix)
         ;
-#ifdef COMMENT_IGNORE
+#ifdef COMMENUM_IGNORE
     return OPTVAL(scanresult_t, make_skip_result(0, ix));
 #else
     return OPTVAL(scanresult_t, make_token_result(token_make_comment(CT_Line, true), ix));
@@ -541,7 +545,7 @@ opt_scanresult_t block_comment_line(blockcomment_t *config, slice_t buffer)
     opt_size_t end_maybe = slice_find(buffer, config->end);
     opt_size_t nl_maybe = slice_indexof(buffer, '\n');
     if (nl_maybe.ok && (!end_maybe.ok || end_maybe.value > nl_maybe.value)) {
-#ifdef COMMENT_IGNORE
+#ifdef COMMENUM_IGNORE
         return OPTVAL(scanresult_t, make_skip_result(0, nl_maybe.value + 1));
 #else
         return OPTVAL(scanresult_t, make_token_result(token_make_comment(CT_Block, false), nl_maybe.value + 1));
@@ -549,13 +553,13 @@ opt_scanresult_t block_comment_line(blockcomment_t *config, slice_t buffer)
     }
     config->in_comment = false;
     if (end_maybe.ok) {
-#ifdef COMMENT_IGNORE
+#ifdef COMMENUM_IGNORE
         return OPTVAL(scanresult_t, make_skip_result(0, end_maybe.value + config->end.len));
 #else
         return OPTVAL(scanresult_t, make_token_result(token_make_comment(CT_Block, true), end_maybe.value + config->end.len));
 #endif
     }
-#ifdef COMMENT_IGNORE
+#ifdef COMMENUM_IGNORE
     return OPTVAL(scanresult_t, make_skip_result(0, buffer.len));
 #else
     return OPTVAL(scanresult_t, make_token_result(token_make_comment(CT_Block, true), buffer.len));
@@ -594,7 +598,7 @@ int isbdigit(int ch)
 opt_scanresult_t numberscanner(void *ctx, slice_t buffer)
 {
     (void) ctx;
-    numbertype_t type = NT_Integer;
+    numbertype_t type = NUM_Integer;
     size_t       ix = 0;
     char         cur = buffer.items[0];
     if (!isdigit(cur)) {
@@ -604,31 +608,31 @@ opt_scanresult_t numberscanner(void *ctx, slice_t buffer)
     if (ix < buffer.len - 1 && cur == '0') {
         if (buffer.items[ix + 1] == 'x' || buffer.items[ix + 1] == 'X') {
             if (ix == buffer.len - 2 || !isxdigit(buffer.items[ix + 2])) {
-                return OPTVAL(scanresult_t, make_token_result(token_make_number(NT_Integer), ix + 1));
+                return OPTVAL(scanresult_t, make_token_result(token_make_number(NUM_Integer), ix + 1));
             }
-            type = NT_HexNumber;
+            type = NUM_HexNumber;
             predicate = isxdigit;
             ix = ix + 2;
         } else if (buffer.items[ix + 1] == 'b' || buffer.items[ix + 1] == 'B') {
             if (ix == buffer.len - 2 || !isbdigit(buffer.items[ix + 2])) {
-                return OPTVAL(scanresult_t, make_token_result(token_make_number(NT_Integer), ix + 1));
+                return OPTVAL(scanresult_t, make_token_result(token_make_number(NUM_Integer), ix + 1));
             }
-            type = NT_BinaryNumber;
+            type = NUM_BinaryNumber;
             predicate = isbdigit;
             ix = ix + 2;
         }
     }
     for (; ix < buffer.len; ++ix) {
         char ch = buffer.items[ix];
-        if (!predicate(ch) && ((ch != '.') || (type == NT_Decimal))) {
+        if (!predicate(ch) && ((ch != '.') || (type == NUM_Decimal))) {
             // FIXME lex '1..10' as '1', '..', '10'. It will now lex as '1.', '.', '10'
             break;
         }
         if (ch == '.') {
-            if (type != NT_Integer) {
+            if (type != NUM_Integer) {
                 break;
             }
-            type = NT_Decimal;
+            type = NUM_Decimal;
         }
     }
     return OPTVAL(scanresult_t, make_token_result(token_make_number(type), ix));
@@ -656,13 +660,13 @@ opt_scanresult_t whitespacescanner(void *ctx, slice_t buffer)
     switch (cur) {
     case '\n':
 #ifdef WS_IGNORE
-        return OPTVAL(scanscanresult_t, make_skip_result(0, 1));
+        return OPTVAL(scanresult_t, make_skip_result(0, 1));
 #else
         return OPTVAL(scanresult_t, make_token_result(token_make_end_of_line(), 1));
 #endif
     case '\t':
 #ifdef WS_IGNORE
-        return OPTVAL(scanscanresult_t, make_skip_result(0, 1));
+        return OPTVAL(scanresult_t, make_skip_result(0, 1));
 #else
         return OPTVAL(scanresult_t, make_token_result(token_make_tab(), 1));
 #endif
@@ -671,7 +675,7 @@ opt_scanresult_t whitespacescanner(void *ctx, slice_t buffer)
             ++ix;
         }
 #ifdef WS_IGNORE
-        return OPTVAL(scanscanresult_t, make_skip_result(0, ix));
+        return OPTVAL(scanresult_t, make_skip_result(0, ix));
 #else
         return OPTVAL(scanresult_t, make_token_result(token_make_whitespace(), ix));
 #endif
@@ -809,7 +813,7 @@ token_t lexer_lex(lexer_t *lexer)
 lexerresult_t lexer_expect(lexer_t *lexer, tokenkind_t kind)
 {
     token_t ret = lexer_peek(lexer);
-    if (!token_matches(&ret, kind)) {
+    if (!token_matches(ret, kind)) {
         return RESERR(lexerresult_t, LE_UnexpectedTokenKind);
     }
     return RESVAL(lexerresult_t, lexer_lex(lexer));
@@ -818,7 +822,7 @@ lexerresult_t lexer_expect(lexer_t *lexer, tokenkind_t kind)
 bool lexer_accept(lexer_t *lexer, tokenkind_t kind)
 {
     token_t ret = lexer_peek(lexer);
-    if (!token_matches(&ret, kind)) {
+    if (!token_matches(ret, kind)) {
         return false;
     }
     lexer_lex(lexer);
@@ -828,10 +832,10 @@ bool lexer_accept(lexer_t *lexer, tokenkind_t kind)
 lexerresult_t lexer_expect_keyword(lexer_t *lexer, keywordcode_t code)
 {
     token_t ret = lexer_peek(lexer);
-    if (!token_matches(&ret, TK_Keyword)) {
+    if (!token_matches(ret, TK_Keyword)) {
         return RESERR(lexerresult_t, LE_UnexpectedTokenKind);
     }
-    if (!token_matches_keyword(&ret, code)) {
+    if (!token_matches_keyword(ret, code)) {
         return RESERR(lexerresult_t, LE_UnexpectedKeyword);
     }
     return RESVAL(lexerresult_t, lexer_lex(lexer));
@@ -840,7 +844,7 @@ lexerresult_t lexer_expect_keyword(lexer_t *lexer, keywordcode_t code)
 bool lexer_accept_keyword(lexer_t *lexer, keywordcode_t code)
 {
     token_t ret = lexer_peek(lexer);
-    if (!token_matches_keyword(&ret, code)) {
+    if (!token_matches_keyword(ret, code)) {
         return false;
     }
     lexer_lex(lexer);
@@ -850,10 +854,10 @@ bool lexer_accept_keyword(lexer_t *lexer, keywordcode_t code)
 lexerresult_t lexer_expect_symbol(lexer_t *lexer, int symbol)
 {
     token_t ret = lexer_peek(lexer);
-    if (!token_matches(&ret, TK_Symbol)) {
+    if (!token_matches(ret, TK_Symbol)) {
         return RESERR(lexerresult_t, LE_UnexpectedTokenKind);
     }
-    if (!token_matches_symbol(&ret, symbol)) {
+    if (!token_matches_symbol(ret, symbol)) {
         return RESERR(lexerresult_t, LE_UnexpectedSymbol);
     }
     return RESVAL(lexerresult_t, lexer_lex(lexer));
@@ -862,7 +866,7 @@ lexerresult_t lexer_expect_symbol(lexer_t *lexer, int symbol)
 bool lexer_accept_symbol(lexer_t *lexer, int symbol)
 {
     token_t ret = lexer_peek(lexer);
-    if (!token_matches_symbol(&ret, symbol)) {
+    if (!token_matches_symbol(ret, symbol)) {
         return false;
     }
     lexer_lex(lexer);
@@ -872,7 +876,7 @@ bool lexer_accept_symbol(lexer_t *lexer, int symbol)
 lexerresult_t lexer_expect_identifier(lexer_t *lexer)
 {
     token_t ret = lexer_peek(lexer);
-    if (!token_is_identifier(&ret)) {
+    if (!token_is_identifier(ret)) {
         return RESERR(lexerresult_t, LE_UnexpectedTokenKind);
     }
     lexer_lex(lexer);
@@ -882,7 +886,7 @@ lexerresult_t lexer_expect_identifier(lexer_t *lexer)
 opt_token_t lexer_accept_identifier(lexer_t *lexer)
 {
     token_t ret = lexer_peek(lexer);
-    if (!token_is_identifier(&ret)) {
+    if (!token_is_identifier(ret)) {
         return OPTNULL(token_t);
     }
     return OPTVAL(token_t, lexer_lex(lexer));
@@ -890,17 +894,17 @@ opt_token_t lexer_accept_identifier(lexer_t *lexer)
 
 bool lexer_matches(lexer_t *lexer, tokenkind_t kind)
 {
-    return token_matches(lexer->tokens.items + lexer->cursor, kind);
+    return token_matches(*(lexer->tokens.items + lexer->cursor), kind);
 }
 
 bool lexer_matches_symbol(lexer_t *lexer, int sym)
 {
-    return token_matches_symbol(lexer->tokens.items + lexer->cursor, sym);
+    return token_matches_symbol(*(lexer->tokens.items + lexer->cursor), sym);
 }
 
 bool lexer_matches_keyword(lexer_t *lexer, keywordcode_t keyword)
 {
-    return token_matches_keyword(lexer->tokens.items + lexer->cursor, keyword);
+    return token_matches_keyword(*(lexer->tokens.items + lexer->cursor), keyword);
 }
 
 bool lexer_exhausted(lexer_t *lexer)
@@ -912,6 +916,17 @@ void lexer_push_back(lexer_t *lexer)
 {
     assert(lexer->cursor > 0 && lexer->cursor < lexer->tokens.len);
     lexer->cursor -= 1;
+}
+
+bool lexer_has_lookback(lexer_t *lexer, size_t lookback)
+{
+    return lexer->cursor > lookback;
+}
+
+token_t lexer_lookback(lexer_t *lexer, size_t lookback)
+{
+    assert(lexer->cursor > lookback);
+    return lexer->tokens.items[lexer->cursor - lookback];
 }
 
 #endif /* LEXER_IMPLEMENTED */
@@ -929,7 +944,7 @@ void test_line_comment_scanner()
     scanresult_t r = res.value;
     assert(r.result == SRT_Token);
     token_t t = r.token;
-    assert(token_matches(&t, TK_Comment));
+    assert(token_matches(t, TK_Comment));
     assert(t.comment_text.comment_type == CT_Line);
     assert(t.comment_text.terminated);
     assert(r.matched == strlen("// Well hello there"));
@@ -945,7 +960,7 @@ void test_block_comment_scanner()
     scanresult_t r = res.value;
     assert(r.result == SRT_Token);
     token_t t = r.token;
-    assert(token_matches(&t, TK_Comment));
+    assert(token_matches(t, TK_Comment));
     assert(t.comment_text.comment_type == CT_Block);
     assert(!t.comment_text.terminated);
     assert(r.matched == strlen("/* Well hello there\n"));
@@ -956,7 +971,7 @@ void test_block_comment_scanner()
     r = res.value;
     assert(r.result == SRT_Token);
     t = r.token;
-    assert(token_matches(&t, TK_Comment));
+    assert(token_matches(t, TK_Comment));
     assert(t.comment_text.comment_type == CT_Block);
     assert(t.comment_text.terminated);
     assert(r.matched == strlen("Sailor */"));
@@ -977,7 +992,7 @@ void test_raw_scanner()
     scanresult_t r = res.value;
     assert(r.result == SRT_Token);
     token_t t = r.token;
-    assert(token_matches(&t, TK_Raw));
+    assert(token_matches(t, TK_Raw));
     assert(slice_eq(t.rawtext.marker, C("@begin")));
     assert(t.rawtext.terminated);
     assert(r.matched == strlen("@begin\n"
@@ -991,7 +1006,7 @@ void test_raw_scanner()
     r = res.value;
     assert(r.result == SRT_Token);
     t = r.token;
-    assert(token_matches(&t, TK_Raw));
+    assert(token_matches(t, TK_Raw));
     assert(slice_eq(t.rawtext.marker, C("@begin")));
     assert(!t.rawtext.terminated);
     assert(r.matched == text.len);
@@ -1001,14 +1016,14 @@ void test_number_scanner()
 {
     slice_t      numbers = C("4 3.14 0xBABECAFE 0b0110");
     size_t       lengths[] = { 1, 4, 10, 6 };
-    numbertype_t types[] = { NT_Integer, NT_Decimal, NT_HexNumber, NT_BinaryNumber };
+    numbertype_t types[] = { NUM_Integer, NUM_Decimal, NUM_HexNumber, NUM_BinaryNumber };
     for (int ix = 0; ix < 4; ++ix) {
         opt_scanresult_t res = numberscanner(NULL, numbers);
         assert(res.ok);
         scanresult_t r = res.value;
         assert(r.result == SRT_Token);
         token_t t = r.token;
-        assert(token_matches(&t, TK_Number));
+        assert(token_matches(t, TK_Number));
         assert(r.matched == lengths[ix]);
         assert(t.number == types[ix]);
         numbers = slice_tail(numbers, r.matched + 1);
@@ -1028,7 +1043,7 @@ void test_quoted_string_scanner()
         scanresult_t r = res.value;
         assert(r.result == SRT_Token);
         token_t t = r.token;
-        assert(token_matches(&t, TK_String));
+        assert(token_matches(t, TK_String));
         assert(r.matched == 7);
         assert(t.quoted_string.quote_type == quotes[ix]);
         assert(t.quoted_string.terminated);
@@ -1047,7 +1062,7 @@ void test_whitespace_scanner()
         scanresult_t r = res.value;
         assert(r.result == SRT_Token);
         token_t t = r.token;
-        assert(token_matches(&t, kinds[ix]));
+        assert(token_matches(t, kinds[ix]));
         assert(r.matched == ((kinds[ix] == TK_Whitespace) ? 4 : 1));
         ws = slice_tail(ws, r.matched + 1);
     }
@@ -1062,7 +1077,7 @@ void test_identifier_scanner()
         scanresult_t r = res.value;
         assert(r.result == SRT_Token);
         token_t t = r.token;
-        assert(token_matches(&t, TK_Identifier));
+        assert(token_matches(t, TK_Identifier));
         assert(r.matched == 5);
         idents = slice_tail(idents, r.matched + 1);
     }
@@ -1078,7 +1093,7 @@ void test_keyword_scanner()
         scanresult_t r = res.value;
         assert(r.result == SRT_Token);
         token_t t = r.token;
-        assert(token_matches(&t, TK_Keyword));
+        assert(token_matches(t, TK_Keyword));
         assert(t.keyword == kw_codes[ix]);
         assert(r.matched == test_keywords[t.keyword].len);
         kws = slice_tail(kws, r.matched + 1);

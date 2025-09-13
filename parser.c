@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "parser.h"
-#include "lexer.h"
-#include "node.h"
-#include "operators.h"
-#include "slice.h"
 #include <stdlib.h>
+#include <string.h>
+
+#include "operators.h"
+#include "node.h"
+#include "elrondlexer.h"
+#include "parser.h"
+#include "slice.h"
 
 tokenlocation_t    parser_location(parser_t *this, nodeptr n);
 tokenlocation_t    parser_location_merge(parser_t *this, nodeptr first_node, nodeptr second_node);
@@ -171,7 +173,7 @@ node_t *parser_node(parser_t *parser, nodeptr n)
 nodeptr _parser_add_node(parser_t *this, node_t n)
 {
     dynarr_append(&this->nodes, n);
-    printf("%zu %s\n", this->nodes.len - 1, node_type_name(n.node_type));
+    // printf("%zu %s\n", this->nodes.len - 1, node_type_name(n.node_type));
     return nodeptr_ptr(this->nodes.len - 1);
 }
 
@@ -186,7 +188,7 @@ token_t parse_statements(parser_t *this, nodeptrs *statements, nodeptr (*parser)
         nodeptr stmt = parser(this);
         if (stmt.ok) {
             dynarr_append(statements, stmt);
-        }
+	}            
     }
 }
 
@@ -1173,11 +1175,16 @@ nodeptr parse_yield_statement(parser_t *this)
 parser_t parse(slice_t text)
 {
     parser_t parser = { 0 };
-    printf("parsing\n%.*s\n", (int) text.len, text.items);
     lexer_push_source(&parser.lexer, text, c_scanner);
-    printf("%zu tokens\n", parser.lexer.tokens.len);
     nodeptrs block = { 0 };
     token_t  t = parse_statements(&parser, &block, parse_module_level_statement);
     parser.root = parser_add_node(&parser, NT_Module, t.location, .statement_block = { .statements = block });
     return parser;
+}
+
+void parser_print(parser_t *parser)
+{
+    if (parser->root.ok) {
+        node_print(stdout, NULL, parser->nodes, parser->root, 0);
+    }
 }

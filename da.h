@@ -7,6 +7,7 @@
 #ifndef __DA_H__
 #define __DA_H__
 
+#include <stdio.h>
 #include <stdlib.h>
 
 #ifdef DA_TEST
@@ -19,52 +20,62 @@
 #define DA(T)            \
     struct {             \
         T     *items;    \
-        size_t len;     \
+        size_t len;      \
         size_t capacity; \
     }
 
 typedef DA(char) sb_t;
+OPTDEF(sb_t);
+typedef DA(sb_t) strings_t;
 
-#define dynarr_ensure(arr, C)                                             \
-    do {                                                                  \
-        size_t __mincap = (C);                                            \
-        if ((arr)->capacity < __mincap) {                                 \
-            size_t __elem_size = sizeof(*((arr)->items));                 \
-            size_t cap = ((arr)->capacity > 0) ? (arr)->capacity : 4;     \
-            while (cap < __mincap) {                                      \
-                cap *= 1.6;                                               \
-            }                                                             \
-            void *newitems = malloc(cap * __elem_size);                   \
-            if (arr->items) {                                             \
+#define dynarr_ensure(arr, C)                                            \
+    do {                                                                 \
+        size_t __mincap = (C);                                           \
+        if ((arr)->capacity < __mincap) {                                \
+            size_t __elem_size = sizeof(*((arr)->items));                \
+            size_t cap = ((arr)->capacity > 0) ? (arr)->capacity : 4;    \
+            while (cap < __mincap) {                                     \
+                cap *= 1.6;                                              \
+            }                                                            \
+            void *newitems = malloc(cap * __elem_size);                  \
+            if (newitems == NULL) {                                      \
+                fprintf(stderr, "Out of memory.\n");                     \
+                abort();                                                 \
+            }                                                            \
+            if ((arr)->items) {                                          \
                 memcpy(newitems, (arr)->items, __elem_size *(arr)->len); \
-                free((arr)->items);                                       \
-            }                                                             \
-            (arr)->items = newitems;                                      \
-            (arr)->capacity = cap;                                        \
-        }                                                                 \
+                free((arr)->items);                                      \
+            }                                                            \
+            (arr)->items = newitems;                                     \
+            (arr)->capacity = cap;                                       \
+        }                                                                \
     } while (0)
 
 #define dynarr_clear(arr) \
     do {                  \
-        arr->len = 0;    \
+        (arr)->len = 0;	  \
     } while (0)
 
-#define dynarr_free(arr)               \
-    do {                               \
-        free(arr->items);              \
-        arr->len = arr->capacity = 0; \
+#define dynarr_free(arr)              \
+    do {                              \
+        free((arr)->items);	      \
+        (arr)->len = (arr)->capacity = 0;	\
     } while (0)
 
-#define dynarr_append(arr, elem)               \
-    do {                                       \
+#define dynarr_append(arr, elem)              \
+    do {                                      \
         dynarr_ensure((arr), (arr)->len + 1); \
         (arr)->items[(arr)->len++] = (elem);  \
     } while (0)
 
-#define sb_as_slice(sb) (make_slice((sb).items, (sb).len))
+#define sb_as_slice(sb) (slice_make((sb).items, (sb).len))
 #define sb_clear(sb) dynarr_clear((sb))
 #define sb_free(sb) dynarr_free((sb))
-#define sb_append_char(sb, ch) dynarr_append((sb), (ch))
+#define sb_append_char(sb, ch)     \
+    do {                           \
+        dynarr_append((sb), (ch)); \
+        dynarr_append((sb), '\0'); \
+    } while (0);
 #define sb_append_sb(sb, a) sb_append((sb), (sb_as_slice((a))))
 
 sb_t *sb_append(sb_t *sb, slice_t slice);
@@ -78,10 +89,10 @@ sb_t *sb_vprintf(sb_t *sb, char const *fmt, va_list args);
 #ifndef DA_IMPLEMENTED
 #define DA_IMPLEMENTED
 
-
 sb_t *sb_append(sb_t *sb, slice_t slice)
 {
-    dynarr_ensure(sb, sb->len + slice.len);
+    dynarr_ensure(sb, sb->len + slice.len + 1);
+    sb->items[sb->len + slice.len + 1] = 0;
     memcpy(sb->items + sb->len, slice.items, slice.len);
     sb->len += slice.len;
     return sb;
