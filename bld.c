@@ -7,6 +7,12 @@ Nob_Cmd cmd = { 0 };
 
 #define BUILD_DIR "build/"
 
+#define APP_SOURCES(S) \
+    S(elrond)          \
+    S(parser)          \
+    S(node)            \
+    S(normalize)
+
 int main(int argc, char **argv)
 {
     NOB_GO_REBUILD_URSELF(argc, argv);
@@ -37,22 +43,18 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-g", "-c", "-o", BUILD_DIR "parser.o", "parser.c");
-    if (!cmd_run(&cmd)) {
-        return 1;
+#undef S
+#define S(SRC)                                                                                    \
+    cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-g", "-c", "-o", BUILD_DIR #SRC ".o", #SRC ".c"); \
+    if (!cmd_run(&cmd)) {                                                                         \
+        return 1;                                                                                 \
     }
-    cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-g", "-c", "-o", BUILD_DIR "node.o", "node.c");
-    if (!cmd_run(&cmd)) {
-        return 1;
-    }
-    cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-g", "-c", "-o", BUILD_DIR "elrond.o", "elrond.c");
-    if (!cmd_run(&cmd)) {
-        return 1;
-    }
+    APP_SOURCES(S)
     cmd_append(&cmd, "cc", "-o", BUILD_DIR "elrond",
-        BUILD_DIR "elrond.o",
-        BUILD_DIR "node.o",
-        BUILD_DIR "parser.o");
+#undef S
+#define S(SRC) BUILD_DIR #SRC ".o",
+    APP_SOURCES(S)
+        "-lm");
     if (!cmd_run(&cmd)) {
         return 1;
     }
