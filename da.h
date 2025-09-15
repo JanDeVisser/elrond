@@ -17,6 +17,12 @@
 
 #include "slice.h"
 
+typedef struct _generic_da {
+    void  *items;
+    size_t len;
+    size_t capacity;
+} generic_da_t;
+
 #define DA(T)            \
     struct {             \
         T     *items;    \
@@ -53,13 +59,13 @@ typedef DA(sb_t) strings_t;
 
 #define dynarr_clear(arr) \
     do {                  \
-        (arr)->len = 0;	  \
+        (arr)->len = 0;   \
     } while (0)
 
-#define dynarr_free(arr)              \
-    do {                              \
-        free((arr)->items);	      \
-        (arr)->len = (arr)->capacity = 0;	\
+#define dynarr_free(arr)                  \
+    do {                                  \
+        free((arr)->items);               \
+        (arr)->len = (arr)->capacity = 0; \
     } while (0)
 
 #define dynarr_append(arr, elem)              \
@@ -67,6 +73,20 @@ typedef DA(sb_t) strings_t;
         dynarr_ensure((arr), (arr)->len + 1); \
         (arr)->items[(arr)->len++] = (elem);  \
     } while (0)
+
+#define dynarr_cmp(arr1, arr2)                                                            \
+    (                                                                                     \
+        {                                                                                 \
+            size_t __sz_1 = sizeof(*((arr1).items));                                      \
+            size_t __sz_2 = sizeof(*((arr2).items));                                      \
+            if (__sz_1 != __sz_2) {                                                       \
+                fprintf(stderr, "Comparing dynamic arrays of different types\n");         \
+                abort();                                                                  \
+            }                                                                             \
+            (generic_da_cmp((generic_da_t *) &(arr1), (generic_da_t *) &(arr2), __sz_1)); \
+        })
+
+#define dynarr_eq(arr1, arr2) (dynarr_cmp((arr1), (arr2)) == 0)
 
 #define sb_as_slice(sb) (slice_make((sb).items, (sb).len))
 #define sb_clear(sb) dynarr_clear((sb))
@@ -78,6 +98,7 @@ typedef DA(sb_t) strings_t;
     } while (0);
 #define sb_append_sb(sb, a) sb_append((sb), (sb_as_slice((a))))
 
+int   generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size);
 sb_t *sb_append(sb_t *sb, slice_t slice);
 sb_t *sb_printf(sb_t *sb, char const *fmt, ...);
 sb_t *sb_vprintf(sb_t *sb, char const *fmt, va_list args);
@@ -88,6 +109,14 @@ sb_t *sb_vprintf(sb_t *sb, char const *fmt, va_list args);
 #undef DA_IMPLEMENTATION
 #ifndef DA_IMPLEMENTED
 #define DA_IMPLEMENTED
+
+int generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size)
+{
+    if (da1->len != da2->len) {
+        return da1->len - da2->len;
+    }
+    return memcmp(da1->items, da2->items, da1->len * elem_size);
+}
 
 sb_t *sb_append(sb_t *sb, slice_t slice)
 {
