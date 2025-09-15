@@ -21,5 +21,6 @@ typedef struct _parser {
 
 parser_t parse(slice_t text);
 void     parser_print(parser_t *parser);
+nodeptr  parser_normalize(parser_t *parser);
 
 #endif /* __PARSER_H__ */

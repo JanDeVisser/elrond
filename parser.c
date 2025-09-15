@@ -172,6 +172,7 @@ node_t *parser_node(parser_t *parser, nodeptr n)
 
 nodeptr _parser_add_node(parser_t *this, node_t n)
 {
+    n.ix = this->nodes.len;
     dynarr_append(&this->nodes, n);
     // printf("%zu %s\n", this->nodes.len - 1, node_type_name(n.node_type));
     return nodeptr_ptr(this->nodes.len - 1);
@@ -1188,3 +1189,12 @@ void parser_print(parser_t *parser)
         node_print(stdout, NULL, parser->nodes, parser->root, 0);
     }
 }
+
+nodeptr parser_normalize(parser_t *parser)
+{
+    nodeptr p = node_normalize(&parser->nodes, parser->root);
+    if (p.ok) {
+	parser->root = p;
+    }
+    return p;
+}    

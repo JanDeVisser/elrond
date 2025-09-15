@@ -54,5 +54,7 @@ int main(int argc, char const **argv)
 	exit(1);
     }
     parser_print(&parser);
+    parser_normalize(&parser);
+    parser_print(&parser);
     return 0;
 }

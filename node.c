@@ -150,8 +150,8 @@ void String_print(FILE *f, nodes_t tree, node_t *n, int indent)
     S(Module)             \
     S(Function)           \
     S(Identifier)         \
-	 S(StatementBlock)			\
-	 S(String)
+    S(StatementBlock)     \
+    S(String)
 
 typedef void (*print_fnc)(FILE *, nodes_t, node_t *, int);
 
@@ -190,6 +190,6 @@ void node_print(FILE *f, char const *prefix, nodes_t tree, nodeptr ix,
     fprintf(f, "%4zu:%3zu %.*s | ",
         n->location.line + 1,
         n->location.column + 1,
-	    SLARG(C(node_type_name(n->node_type))));
+        SLARG(C(node_type_name(n->node_type))));
     print_fncs[n->node_type](f, tree, n, indent);
 }
