@@ -136,16 +136,16 @@ typedef struct _structure {
     nodeptrs fields;
 } structure_t;
 
-typedef enum {
-    TYP_Alias,
-    TYP_Array,
-    TYP_DynArray,
-    TYP_Optional,
-    TYP_Reference,
-    TYP_Result,
-    TYP_Slice,
-    TYP_ZeroTerminatedArray,
-} type_kind_t;
+typedef enum _type_node_kind {
+    TYPN_Alias,
+    TYPN_Array,
+    TYPN_DynArray,
+    TYPN_Optional,
+    TYPN_Reference,
+    TYPN_Result,
+    TYPN_Slice,
+    TYPN_ZeroTerminatedArray,
+} type_node_kind_t;
 
 typedef struct _alias_description {
     slice_t  name;
@@ -163,7 +163,7 @@ typedef struct _result_description {
 } result_description_t;
 
 typedef struct _type_specification {
-    type_kind_t kind;
+    type_node_kind_t kind;
     union {
         alias_description_t  alias_descr;
         array_description_t  array_descr;

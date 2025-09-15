@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "node.h"
 #include "elrondlexer.h"
+#include "node.h"
 #include "operators.h"
 #include "slice.h"
 

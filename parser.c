@@ -7,9 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "operators.h"
-#include "node.h"
 #include "elrondlexer.h"
+#include "node.h"
+#include "operators.h"
 #include "parser.h"
 #include "slice.h"
 
@@ -189,7 +189,7 @@ token_t parse_statements(parser_t *this, nodeptrs *statements, nodeptr (*parser)
         nodeptr stmt = parser(this);
         if (stmt.ok) {
             dynarr_append(statements, stmt);
-	}            
+        }
     }
 }
 
@@ -651,7 +651,7 @@ nodeptr parse_type(parser_t *this)
             this,
             NT_TypeSpecification,
             tokenlocation_merge(t.location, parser_location(this, type)),
-            .type_specification = { .kind = TYP_Reference, .referencing = type });
+            .type_specification = { .kind = TYPN_Reference, .referencing = type });
     }
     if (lexer_accept_symbol(&this->lexer, '?')) {
         nodeptr type = parse_type(this);
@@ -662,7 +662,7 @@ nodeptr parse_type(parser_t *this)
             this,
             NT_TypeSpecification,
             tokenlocation_merge(t.location, parser_location(this, type)),
-            .type_specification = { .kind = TYP_Optional, .optional_of = type });
+            .type_specification = { .kind = TYPN_Optional, .optional_of = type });
     }
     if (lexer_accept_symbol(&this->lexer, '[')) {
         if (lexer_accept_symbol(&this->lexer, ']')) {
@@ -674,7 +674,7 @@ nodeptr parse_type(parser_t *this)
                 this,
                 NT_TypeSpecification,
                 tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYP_Slice, .slice_of = type });
+                .type_specification = { .kind = TYPN_Slice, .slice_of = type });
         }
         if (lexer_accept_symbol(&this->lexer, '0')) {
             lexerresult_t res = lexer_expect_symbol(&this->lexer, ']');
@@ -690,7 +690,7 @@ nodeptr parse_type(parser_t *this)
                 this,
                 NT_TypeSpecification,
                 tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYP_ZeroTerminatedArray, .array_of = type });
+                .type_specification = { .kind = TYPN_ZeroTerminatedArray, .array_of = type });
         }
         if (lexer_accept_symbol(&this->lexer, '*')) {
             lexerresult_t res = lexer_expect_symbol(&this->lexer, ']');
@@ -706,7 +706,7 @@ nodeptr parse_type(parser_t *this)
                 this,
                 NT_TypeSpecification,
                 tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYP_DynArray, .array_of = type });
+                .type_specification = { .kind = TYPN_DynArray, .array_of = type });
         }
         lexerresult_t res = lexer_expect(&this->lexer, TK_Number);
         if (!res.ok) {
@@ -731,7 +731,7 @@ nodeptr parse_type(parser_t *this)
                 this,
                 NT_TypeSpecification,
                 tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYP_Array, .array_descr = { .array_of = type, .size = size } });
+                .type_specification = { .kind = TYPN_Array, .array_descr = { .array_of = type, .size = size } });
         }
     }
 
@@ -759,7 +759,7 @@ nodeptr parse_type(parser_t *this)
         this,
         NT_TypeSpecification,
         tokenlocation_merge(t.location, parser_current_location(this)),
-        .type_specification = { .kind = TYP_Alias, .alias_descr = { .name = parser_text(this, name), .arguments = arguments } });
+        .type_specification = { .kind = TYPN_Alias, .alias_descr = { .name = parser_text(this, name), .arguments = arguments } });
     if (lexer_accept_symbol(&this->lexer, '/')) {
         nodeptr error_type = parse_type(this);
         if (error_type.ok) {
@@ -767,7 +767,7 @@ nodeptr parse_type(parser_t *this)
                 this,
                 NT_TypeSpecification,
                 tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYP_Result, .result_descr = { .success = type, .error = error_type } });
+                .type_specification = { .kind = TYPN_Result, .result_descr = { .success = type, .error = error_type } });
         }
         return nullptr;
     }
@@ -1194,7 +1194,7 @@ nodeptr parser_normalize(parser_t *parser)
 {
     nodeptr p = node_normalize(&parser->nodes, parser->root);
     if (p.ok) {
-	parser->root = p;
+        parser->root = p;
     }
     return p;
-}    
+}

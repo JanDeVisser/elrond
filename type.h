@@ -1,0 +1,156 @@
+/*
+ * Copyright (c) 2023, 2025 Jan de Visser <jan@finiandarcy.com>
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#ifndef __TYPE_H__
+#define __TYPE_H__
+
+#include <stdint.h>
+
+#include "node.h"
+#include "operators.h"
+#include "slice.h"
+
+#define TYPEKINDS(S) \
+    S(ArrayType)     \
+    S(BoolType)      \
+    S(DynArrayType)  \
+    S(EnumType)      \
+    S(FloatType)     \
+    S(IntType)       \
+    S(OptionalType)  \
+    S(PointerType)   \
+    S(RangeType)     \
+    S(ReferenceType) \
+    S(ResultType)    \
+    S(Signature)     \
+    S(SliceType)     \
+    S(StructType)    \
+    S(TypeList)      \
+    S(VoidType)      \
+    S(ZeroTerminatedArray)
+
+typedef enum _type_kind {
+#undef S
+#define S(TK) TYPK_##TK,
+    TYPEKINDS(S)
+#undef S
+} type_kind_t;
+
+typedef struct _array_type {
+    nodeptr array_of;
+    size_t  size;
+} array_type_t;
+
+typedef struct _enum_type_value {
+    slice_t  label;
+    intptr_t value;
+    nodeptr  payload;
+} enum_type_value_t;
+
+typedef struct _enum_type {
+    DA(enum_type_value_t)
+    values;
+    nodeptr underlying_type;
+} enum_type_t;
+
+#define FLOATWIDTHS(S) \
+    S(32)              \
+    S(64)
+
+typedef enum _float_width {
+    FW_32 = sizeof(float),
+    FW_64 = sizeof(double),
+} float_width_t;
+
+#define INTWIDTHS(S) \
+    S(8)             \
+    S(16)            \
+    S(32)            \
+    S(64)
+
+typedef struct _int_type {
+    bool     is_signed;
+    int      width_bits;
+    uint64_t max_value;
+    int64_t  min_value;
+} int_type_t;
+
+typedef struct _signature_type {
+    nodeptrs parameters;
+    nodeptr  result;
+    bool     noreturn;
+    bool     nodiscard;
+} signature_type_t;
+
+typedef struct _struct_field {
+    slice_t name;
+    nodeptr type;
+} struct_field_t;
+
+typedef DA(struct_field_t) struct_fields_t;
+
+typedef struct _result_type {
+    nodeptr success;
+    nodeptr failure;
+} result_type_t;
+
+typedef struct _type {
+    type_kind_t kind;
+    slice_t     str;
+    union {
+        nodeptr          array_of;
+        array_type_t     array_type;
+        enum_type_t      enum_type;
+        float_width_t    float_width;
+        int_type_t       int_type;
+        nodeptr          optional_of;
+        nodeptr          range_of;
+        nodeptr          referencing;
+        result_type_t    result_type;
+        signature_type_t signature_type;
+        nodeptr          slice_of;
+        struct_fields_t  struct_fields;
+        nodeptrs         type_list_types;
+    };
+} type_t;
+
+#undef S
+#define S(W) extern nodeptr F##W;
+FLOATWIDTHS(S)
+#undef S
+#define S(W)             \
+    extern nodeptr I##W; \
+    extern nodeptr U##W;
+INTWIDTHS(S)
+#undef S
+
+extern nodeptr Boolean;
+extern nodeptr Null;
+extern nodeptr String;
+extern nodeptr StringBuilder;
+extern nodeptr CString;
+extern nodeptr Character;
+extern nodeptr Void;
+extern nodeptr Pointer;
+extern nodeptr VoidFnc;
+
+intptr_t align_at(intptr_t alignment, intptr_t value);
+intptr_t words_needed(intptr_t word_size, intptr_t bytes);
+slice_t  type_to_string(nodeptr p);
+intptr_t type_align_of(nodeptr p);
+intptr_t type_size_of(nodeptr p);
+nodeptr  referencing(nodeptr type);
+nodeptr  slice_of(nodeptr type);
+nodeptr  array_of(nodeptr type, size_t size);
+nodeptr  dyn_array_of(nodeptr type);
+nodeptr  zero_terminated_array_of(nodeptr type);
+nodeptr  optional_of(nodeptr type);
+nodeptr  result_of(nodeptr success, nodeptr failure);
+nodeptr  signature(nodeptrs parameters, nodeptr result);
+nodeptr  typelist_of(nodeptrs types);
+nodeptr  struct_of(struct_fields_t fields);
+
+#endif /* __TYPE_H__ */

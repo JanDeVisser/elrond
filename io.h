@@ -36,7 +36,7 @@ opt_sb_t slurp_file(slice_t path)
     ssize_t sz = (ssize_t) lseek(fh, 0, SEEK_END);
     if (sz < 0) {
         goto done_close;
-    }        
+    }
     if (lseek(fh, 0, SEEK_SET) < 0) {
         goto done_close;
     }
@@ -46,11 +46,11 @@ opt_sb_t slurp_file(slice_t path)
     contents.items[sz] = 0;
     if (read(fh, contents.items, sz) < sz) {
         sb_free(&contents);
-	goto done_close;
+        goto done_close;
     }
     contents.len = sz;
     ret = OPTVAL(sb_t, contents);
-    
+
 done_close:
     close(fh);
 

@@ -52,7 +52,7 @@ nodeptr BinaryExpression_normalize(nodes_t *tree, node_t *n)
 nodeptr Function_normalize(nodes_t *tree, node_t *n)
 {
     nodeptr impl = normalize(tree, n->function.implementation);
-    nodeptr sig =  normalize(tree, n->function.signature);
+    nodeptr sig = normalize(tree, n->function.signature);
     if (n->function.implementation.value != impl.value || n->function.signature.value != sig.value) {
         node_t new_node = *n;
         new_node.function.implementation = impl;
@@ -64,21 +64,21 @@ nodeptr Function_normalize(nodes_t *tree, node_t *n)
 
 nodeptr normalize_block(nodes_t *tree, node_t *n, off_t offset)
 {
-    nodeptrs new_block = {0};
-    nodeptrs *current_block = (nodeptrs*)(((void *) n) + offset);
+    nodeptrs  new_block = { 0 };
+    nodeptrs *current_block = (nodeptrs *) (((void *) n) + offset);
     for (size_t ix = 0; ix < current_block->len; ++ix) {
         nodeptr normalized = node_normalize(tree, current_block->items[ix]);
-	if (normalized.ok) {
+        if (normalized.ok) {
             dynarr_append(&new_block, normalized);
-	}            
+        }
     }
     if (!dynarr_eq(new_block, *current_block)) {
         node_t new_node = *n;
-	*(nodeptrs*)(((void *) &new_node) + offset) = new_block;
+        *(nodeptrs *) (((void *) &new_node) + offset) = new_block;
         return nodes_add_node(tree, new_node);
     }
     return nodeptr_ptr(n->ix);
-}    
+}
 
 nodeptr Module_normalize(nodes_t *tree, node_t *n)
 {
@@ -117,7 +117,7 @@ nodeptr node_normalize(nodes_t *tree, nodeptr ix)
 {
     if (!normalize_initialized) {
         initialize_normalize();
-    }        
+    }
     node_t *n = tree->items + ix.value;
     return normalize_fncs[n->node_type](tree, n);
 }

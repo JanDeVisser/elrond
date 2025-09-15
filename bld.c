@@ -11,7 +11,8 @@ Nob_Cmd cmd = { 0 };
     S(elrond)          \
     S(parser)          \
     S(node)            \
-    S(normalize)
+    S(normalize)       \
+    S(type)
 
 int main(int argc, char **argv)
 {
@@ -53,8 +54,7 @@ int main(int argc, char **argv)
     cmd_append(&cmd, "cc", "-o", BUILD_DIR "elrond",
 #undef S
 #define S(SRC) BUILD_DIR #SRC ".o",
-    APP_SOURCES(S)
-        "-lm");
+        APP_SOURCES(S) "-lm");
     if (!cmd_run(&cmd)) {
         return 1;
     }

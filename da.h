@@ -72,7 +72,8 @@ typedef DA(sb_t) strings_t;
     do {                                      \
         dynarr_ensure((arr), (arr)->len + 1); \
         (arr)->items[(arr)->len++] = (elem);  \
-    } while (0)
+        ((arr)->len - 1);                     \
+    } while (0);
 
 #define dynarr_cmp(arr1, arr2)                                                            \
     (                                                                                     \
@@ -100,6 +101,8 @@ typedef DA(sb_t) strings_t;
 
 int   generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size);
 sb_t *sb_append(sb_t *sb, slice_t slice);
+sb_t  sb_format(char const *fmt, ...);
+sb_t  sb_vformat(char const *fmt, va_list args);
 sb_t *sb_printf(sb_t *sb, char const *fmt, ...);
 sb_t *sb_vprintf(sb_t *sb, char const *fmt, va_list args);
 
@@ -116,6 +119,22 @@ int generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size)
         return da1->len - da2->len;
     }
     return memcmp(da1->items, da2->items, da1->len * elem_size);
+}
+
+sb_t sb_format(char const *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    sb_t ret = sb_vformat(fmt, args);
+    va_end(args);
+    return ret;
+}
+
+sb_t sb_vformat(char const *fmt, va_list args)
+{
+    sb_t ret = { 0 };
+    sb_vprintf(&ret, fmt, args);
+    return ret;
 }
 
 sb_t *sb_append(sb_t *sb, slice_t slice)
