@@ -17,7 +17,11 @@ Nob_Cmd cmd = { 0 };
 int main(int argc, char **argv)
 {
     NOB_GO_REBUILD_URSELF(argc, argv);
-    cmd_append(&cmd, "cc", "-DSLICE_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR "slice", "slice.h");
+    char *cc = getenv("CC");
+    if (cc == NULL) {
+        cc = "cc";
+    }
+    cmd_append(&cmd, cc, "-DSLICE_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR "slice", "slice.h");
     if (!cmd_run(&cmd)) {
         return 1;
     }
@@ -26,7 +30,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    cmd_append(&cmd, "cc", "-DDA_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR "da", "da.h");
+    cmd_append(&cmd, cc, "-DDA_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR "da", "da.h");
     if (!cmd_run(&cmd)) {
         return 1;
     }
@@ -35,7 +39,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    cmd_append(&cmd, "cc", "-DLEXER_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR "lexer", "lexer.h");
+    cmd_append(&cmd, cc, "-DLEXER_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR "lexer", "lexer.h");
     if (!cmd_run(&cmd)) {
         return 1;
     }
@@ -45,13 +49,13 @@ int main(int argc, char **argv)
     }
 
 #undef S
-#define S(SRC)                                                                                    \
-    cmd_append(&cmd, "cc", "-Wall", "-Wextra", "-g", "-c", "-o", BUILD_DIR #SRC ".o", #SRC ".c"); \
-    if (!cmd_run(&cmd)) {                                                                         \
-        return 1;                                                                                 \
+#define S(SRC)                                                                                  \
+    cmd_append(&cmd, cc, "-Wall", "-Wextra", "-g", "-c", "-o", BUILD_DIR #SRC ".o", #SRC ".c"); \
+    if (!cmd_run(&cmd)) {                                                                       \
+        return 1;                                                                               \
     }
     APP_SOURCES(S)
-    cmd_append(&cmd, "cc", "-o", BUILD_DIR "elrond",
+    cmd_append(&cmd, cc, "-o", BUILD_DIR "elrond",
 #undef S
 #define S(SRC) BUILD_DIR #SRC ".o",
         APP_SOURCES(S) "-lm");
