@@ -10,6 +10,7 @@
 #include "node.h"
 #include "operators.h"
 #include "slice.h"
+#include "value.h"
 
 char const *node_type_name(nodetype_t type)
 {
@@ -66,6 +67,16 @@ void Continue_print(FILE *f, nodes_t tree, node_t *n, int indent)
     fprintf(f, "\n");
 }
 
+void Constant_print(FILE *f, nodes_t tree, node_t *n, int indent)
+{
+    (void) tree;
+    (void) indent;
+    if (n->constant_value.ok) {
+        value_print(f, n->constant_value.value);
+    }
+    fprintf(f, "\n");
+}
+
 void Defer_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
     fprintf(f, "\n");
@@ -100,6 +111,13 @@ void EnumValue_print(FILE *f, nodes_t tree, node_t *n, int indent)
     fprintf(f, SL "\n", SLARG(n->variable_declaration.name));
 }
 
+void ForeignFunction_print(FILE *f, nodes_t tree, node_t *n, int indent)
+{
+    (void) tree;
+    (void) indent;
+    fprintf(f, SL "\n", SLARG(n->identifier));
+}
+
 void Function_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
     fprintf(f, SL "\n", SLARG(n->function.name));
@@ -122,6 +140,13 @@ void Module_print(FILE *f, nodes_t tree, node_t *n, int indent)
     }
 }
 
+void Number_print(FILE *f, nodes_t tree, node_t *n, int indent)
+{
+    (void) tree;
+    (void) indent;
+    fprintf(f, SL "\n", SLARG(n->number.number));
+}
+
 void StatementBlock_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
     fprintf(f, "\n");
@@ -142,12 +167,15 @@ void String_print(FILE *f, nodes_t tree, node_t *n, int indent)
     S(BinaryExpression)   \
     S(BoolConstant)       \
     S(Break)              \
+    S(Constant)           \
     S(Continue)           \
     S(Defer)              \
     S(Embed)              \
     S(Enum)               \
     S(EnumValue)          \
+    S(ForeignFunction)    \
     S(Module)             \
+    S(Number)             \
     S(Function)           \
     S(Identifier)         \
     S(StatementBlock)     \

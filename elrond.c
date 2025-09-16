@@ -17,9 +17,9 @@
 #include "io.h"
 #include "slice.h"
 
-#include "lexer.h"
 #include "operators.h"
 #include "parser.h"
+#include "type.h"
 
 opt_sb_t get_command_string()
 {
@@ -44,6 +44,7 @@ int main(int argc, char const **argv)
         fprintf(stderr, "Error reading file `%.*s`\n", (int) file_name.len, file_name.items);
         exit(1);
     }
+    type_registry_init();
     parser_t parser = parse(sb_as_slice(contents_maybe.value));
     if (parser.errors.len > 0) {
         for (size_t ix = 0; ix < parser.errors.len; ++ix) {

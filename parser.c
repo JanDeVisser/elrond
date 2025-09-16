@@ -13,13 +13,8 @@
 #include "parser.h"
 #include "slice.h"
 
-tokenlocation_t    parser_location(parser_t *this, nodeptr n);
-tokenlocation_t    parser_location_merge(parser_t *this, nodeptr first_node, nodeptr second_node);
-void               parser_verror(parser_t *parser, tokenlocation_t location, char const *fmt, va_list args);
-void               parser_error(parser_t *parser, tokenlocation_t location, char const *fmt, ...);
 bool               _parser_check_token(parser_t *parser, opt_token_t t, char const *fmt, ...);
 bool               _parser_check_node(parser_t *parser, tokenlocation_t location, nodeptr n, char const *fmt, ...);
-nodeptr            _parser_add_node(parser_t *this, node_t n);
 node_t            *parser_node(parser_t *parser, nodeptr n);
 nodeptr            parse_primary(parser_t *this);
 nodeptr            parse_expression(parser_t *this, int minprec);
@@ -47,9 +42,6 @@ nodeptr            parse_struct(parser_t *this);
 nodeptr            parse_var_decl(parser_t *this);
 nodeptr            parse_while_statement(parser_t *this);
 nodeptr            parse_yield_statement(parser_t *this);
-
-#define parser_add_node(parser, nt, loc, ...) \
-    _parser_add_node((parser), (node_t) { .node_type = (nt), .location = (loc), __VA_ARGS__ })
 
 #define parser_check_token(parser, token, fmt, ...)                          \
     (                                                                        \
@@ -170,7 +162,7 @@ node_t *parser_node(parser_t *parser, nodeptr n)
     return parser->nodes.items + n.value;
 }
 
-nodeptr _parser_add_node(parser_t *this, node_t n)
+nodeptr parser_append_node(parser_t *this, node_t n)
 {
     n.ix = this->nodes.len;
     dynarr_append(&this->nodes, n);
@@ -1192,7 +1184,7 @@ void parser_print(parser_t *parser)
 
 nodeptr parser_normalize(parser_t *parser)
 {
-    nodeptr p = node_normalize(&parser->nodes, parser->root);
+    nodeptr p = node_normalize(parser, parser->root);
     if (p.ok) {
         parser->root = p;
     }

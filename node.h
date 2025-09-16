@@ -9,11 +9,13 @@
 
 #include "operators.h"
 #include "slice.h"
+#include "value.h"
 
 #define NODETYPES(S)       \
     S(BinaryExpression)    \
     S(BoolConstant)        \
     S(Break)               \
+    S(Constant)            \
     S(Continue)            \
     S(Defer)               \
     S(Embed)               \
@@ -53,15 +55,6 @@ typedef enum _node_type {
     NODETYPES(S)
 #undef S
 } nodetype_t;
-
-typedef opt_size_t nodeptr;
-#ifndef __cplusplus
-extern nodeptr nullptr;
-#else
-#warning "Can't compile elrond with C++ yet"
-#endif
-#define nodeptr_ptr(v) ((nodeptr) { .ok = true, .value = (v) })
-typedef DA(nodeptr) nodeptrs;
 
 typedef struct _binary_expression {
     nodeptr    lhs;
@@ -204,6 +197,7 @@ typedef struct _node {
     union {
         binary_expression_t    binary_expression;
         bool                   bool_constant;
+        opt_value_t            constant_value;
         enumeration_t          enumeration;
         enum_value_t           enum_value;
         for_statement_t        for_statement;
@@ -228,11 +222,13 @@ typedef struct _node {
     };
 } node_t;
 
+struct _parser;
+
 OPTDEF(node_t);
 typedef DA(node_t) nodes_t;
 
 char const *node_type_name(nodetype_t type);
 void        node_print(FILE *f, char const *prefix, nodes_t tree, nodeptr ix, int indent);
-nodeptr     node_normalize(nodes_t *tree, nodeptr ix);
+nodeptr     node_normalize(struct _parser *parser, nodeptr ix);
 
 #endif /* __NODE_H__ */

@@ -9,7 +9,6 @@
 
 #include <stdint.h>
 
-#include "node.h"
 #include "operators.h"
 #include "slice.h"
 
@@ -71,11 +70,21 @@ typedef enum _float_width {
     S(32)            \
     S(64)
 
+typedef enum _int_code {
+#undef S
+#define S(W)     \
+    IC_U##W = W, \
+    IC_I##W = W + 1,
+    INTWIDTHS(S)
+#undef S
+} int_code_t;
+
 typedef struct _int_type {
-    bool     is_signed;
-    int      width_bits;
-    uint64_t max_value;
-    int64_t  min_value;
+    int_code_t code;
+    bool       is_signed;
+    int        width_bits;
+    uint64_t   max_value;
+    int64_t    min_value;
 } int_type_t;
 
 typedef struct _signature_type {
@@ -152,5 +161,7 @@ nodeptr  result_of(nodeptr success, nodeptr failure);
 nodeptr  signature(nodeptrs parameters, nodeptr result);
 nodeptr  typelist_of(nodeptrs types);
 nodeptr  struct_of(struct_fields_t fields);
+type_t  *get_type(nodeptr p);
+void     type_registry_init();
 
 #endif /* __TYPE_H__ */

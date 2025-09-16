@@ -16,7 +16,6 @@
     static intptr_t TK##_align_of(type_t *t);
 TYPEKINDS(S)
 #undef S
-static type_t *get_type(nodeptr p);
 
 typedef struct _type_vtable {
     slice_t (*to_string)(type_t *);
@@ -62,42 +61,42 @@ type_t _F64 = {
 type_t _U8 = {
     .kind = TYPK_IntType,
     .str = { 0 },
-    .int_type = { .is_signed = false, .width_bits = 8, .max_value = 0xFF, .min_value = 0 }
+    .int_type = { .code = IC_U8, .is_signed = false, .width_bits = 8, .max_value = 0xFF, .min_value = 0 }
 };
 type_t _U16 = {
     .kind = TYPK_IntType,
     .str = { 0 },
-    .int_type = { .is_signed = false, .width_bits = 16, .max_value = 0xFFFF, .min_value = 0 }
+    .int_type = { .code = IC_U16, .is_signed = false, .width_bits = 16, .max_value = 0xFFFF, .min_value = 0 }
 };
 type_t _U32 = {
     .kind = TYPK_IntType,
     .str = { 0 },
-    .int_type = { .is_signed = false, .width_bits = 32, .max_value = 0xFFFFFFFF, .min_value = 0 }
+    .int_type = { .code = IC_U32, .is_signed = false, .width_bits = 32, .max_value = 0xFFFFFFFF, .min_value = 0 }
 };
 type_t _U64 = {
     .kind = TYPK_IntType,
     .str = { 0 },
-    .int_type = { .is_signed = false, .width_bits = 64, .max_value = 0xFFFFFFFFFFFFFFFF, .min_value = 0 }
+    .int_type = { .code = IC_U64, .is_signed = false, .width_bits = 64, .max_value = 0xFFFFFFFFFFFFFFFF, .min_value = 0 }
 };
 type_t _I8 = {
     .kind = TYPK_IntType,
     .str = { 0 },
-    .int_type = { .is_signed = true, .width_bits = 8, .max_value = 0x7F, .min_value = -0x80 }
+    .int_type = { .code = IC_I8, .is_signed = true, .width_bits = 8, .max_value = 0x7F, .min_value = -0x80 }
 };
 type_t _I16 = {
     .kind = TYPK_IntType,
     .str = { 0 },
-    .int_type = { .is_signed = true, .width_bits = 16, .max_value = 0x7FFFF, .min_value = -0x8000 }
+    .int_type = { .code = IC_I16, .is_signed = true, .width_bits = 16, .max_value = 0x7FFFF, .min_value = -0x8000 }
 };
 type_t _I32 = {
     .kind = TYPK_IntType,
     .str = { 0 },
-    .int_type = { .is_signed = true, .width_bits = 32, .max_value = 0x7FFFFFFF, .min_value = -0x80000000 }
+    .int_type = { .code = IC_I32, .is_signed = true, .width_bits = 32, .max_value = 0x7FFFFFFF, .min_value = -0x80000000 }
 };
 type_t _I64 = {
     .kind = TYPK_IntType,
     .str = { 0 },
-    .int_type = { .is_signed = true, .width_bits = 64, .max_value = 0x7FFFFFFFFFFFFFFF, .min_value = (int64_t) 0x8000000000000000UL }
+    .int_type = { .code = IC_I64, .is_signed = true, .width_bits = 64, .max_value = 0x7FFFFFFFFFFFFFFF, .min_value = (int64_t) 0x8000000000000000UL }
 };
 
 /* ------------------------------------------------------------------------ */

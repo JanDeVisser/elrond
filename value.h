@@ -1,0 +1,42 @@
+/*
+ * Copyright (c) 2023, 2025 Jan de Visser <jan@finiandarcy.com>
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#ifndef __VALUE_H__
+#define __VALUE_H__
+
+#include "da.h"
+#include "slice.h"
+#include "type.h"
+
+typedef DA(struct _value) values_t;
+
+typedef struct _value {
+    nodeptr type;
+    union {
+#undef S
+#define S(W)          \
+    int##W##_t  i##W; \
+    uint##W##_t u##W;
+        INTWIDTHS(S)
+#undef S
+        bool         boolean;
+        float        f32;
+        double       f64;
+        slice_t      slice;
+        generic_da_t da;
+        array_t      array;
+        void        *ptr;
+        values_t     values;
+    };
+} value_t;
+
+OPTDEF(value_t);
+
+value_t     make_value_from_string(slice_t str);
+void        value_print(FILE *f, value_t value);
+opt_value_t evaluate(value_t v1, operator_t op, value_t v2);
+
+#endif /* __VALUE_H__ */

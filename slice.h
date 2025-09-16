@@ -129,6 +129,14 @@ OPTDEF(long);
 typedef unsigned long ulong;
 OPTDEF(ulong);
 
+typedef opt_size_t nodeptr;
+#ifndef __cplusplus
+extern nodeptr nullptr;
+#else
+#warning "Can't compile elrond with C++ yet"
+#endif
+#define nodeptr_ptr(v) ((nodeptr) { .ok = true, .value = (v) })
+
 typedef struct slice {
     char  *items;
     size_t len;
@@ -203,7 +211,7 @@ slice_t slice_last(slice_t slice, size_t num)
 slice_t slice_sub(slice_t slice, size_t start, size_t end)
 {
     assert(start <= slice.len && end <= slice.len && start <= end);
-    return slice_make(slice.items + start, slice.len - (end - start));
+    return slice_make(slice.items + start, end - start);
 }
 
 slice_t slice_sub_by_length(slice_t slice, size_t start, size_t num)

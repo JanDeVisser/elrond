@@ -12,7 +12,8 @@ Nob_Cmd cmd = { 0 };
     S(parser)          \
     S(node)            \
     S(normalize)       \
-    S(type)
+    S(type)            \
+    S(value)
 
 int main(int argc, char **argv)
 {

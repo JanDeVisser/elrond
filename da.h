@@ -33,6 +33,7 @@ typedef struct _generic_da {
 typedef DA(char) sb_t;
 OPTDEF(sb_t);
 typedef DA(sb_t) strings_t;
+typedef DA(nodeptr) nodeptrs;
 
 #define dynarr_ensure(arr, C)                                            \
     do {                                                                 \
@@ -92,15 +93,20 @@ typedef DA(sb_t) strings_t;
 #define sb_as_slice(sb) (slice_make((sb).items, (sb).len))
 #define sb_clear(sb) dynarr_clear((sb))
 #define sb_free(sb) dynarr_free((sb))
-#define sb_append_char(sb, ch)     \
-    do {                           \
-        dynarr_append((sb), (ch)); \
-        dynarr_append((sb), '\0'); \
+#define sb_append_char(sb, ch)              \
+    do {                                    \
+        dynarr_ensure((sb), (sb)->len + 2); \
+        (sb)->items[(sb)->len] = (ch);      \
+        (sb)->items[(sb)->len + 1] = '\0';  \
+        (sb)->len++;                        \
     } while (0);
 #define sb_append_sb(sb, a) sb_append((sb), (sb_as_slice((a))))
+#define sb_append_cstr(sb, a) sb_append((sb), C(a));
 
 int   generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size);
 sb_t *sb_append(sb_t *sb, slice_t slice);
+sb_t *sb_unescape(sb_t *sb, slice_t escaped);
+sb_t *sb_escape(sb_t *sb, slice_t slice);
 sb_t  sb_format(char const *fmt, ...);
 sb_t  sb_vformat(char const *fmt, va_list args);
 sb_t *sb_printf(sb_t *sb, char const *fmt, ...);
@@ -140,9 +146,72 @@ sb_t sb_vformat(char const *fmt, va_list args)
 sb_t *sb_append(sb_t *sb, slice_t slice)
 {
     dynarr_ensure(sb, sb->len + slice.len + 1);
-    sb->items[sb->len + slice.len + 1] = 0;
+    sb->items[sb->len + slice.len] = 0;
     memcpy(sb->items + sb->len, slice.items, slice.len);
     sb->len += slice.len;
+    return sb;
+}
+
+sb_t *sb_unescape(sb_t *sb, slice_t escaped)
+{
+    if (!slice_indexof(escaped, '\\').ok) {
+        return sb_append(sb, escaped);
+    }
+    bool prev_was_backslash = false;
+    for (size_t ix = 0; ix < escaped.len; ++ix) {
+        int ch = escaped.items[ix];
+        if (prev_was_backslash) {
+            switch (ch) {
+            case 'n':
+                sb_append_char(sb, '\n');
+                break;
+            case 't':
+                sb_append_char(sb, '\t');
+                break;
+            case 'r':
+                sb_append_char(sb, '\r');
+                break;
+            default:
+                sb_append_char(sb, ch);
+                break;
+            }
+            prev_was_backslash = false;
+            continue;
+        }
+        if (ch == '\\') {
+            prev_was_backslash = true;
+            continue;
+        }
+        sb_append_char(sb, ch);
+    }
+    return sb;
+}
+
+sb_t *sb_escape(sb_t *sb, slice_t slice)
+{
+    if (!slice_first_of(slice, C("\\\n\t\r")).ok) {
+        return sb_append(sb, slice);
+    }
+    for (size_t ix = 0; ix < slice.len; ++ix) {
+        int ch = slice.items[ix];
+        switch (ch) {
+        case '\n':
+            sb_append_cstr(sb, "\\n");
+            break;
+        case '\t':
+            sb_append_cstr(sb, "\\t");
+            break;
+        case '\r':
+            sb_append_cstr(sb, "\\r");
+            break;
+        case '\\':
+            sb_append_cstr(sb, "\\\\");
+            break;
+        default:
+            sb_append_char(sb, ch);
+            break;
+        }
+    }
     return sb;
 }
 
