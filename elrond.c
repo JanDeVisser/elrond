@@ -35,6 +35,22 @@ opt_sb_t get_command_string()
     return OPTVAL(sb_t, ret);
 }
 
+void report(char const *hdr, parser_t *parser)
+{
+    static int stage = 1;
+    printf("\nStage %d: %s\n", stage, hdr);
+    printf("------------------------\n");
+    if (parser->errors.len > 0) {
+        for (size_t ix = 0; ix < parser->errors.len; ++ix) {
+            slice_t msg = sb_as_slice(parser->errors.items[ix]);
+            printf("%.*s\n", (int) msg.len, msg.items);
+        }
+        exit(1);
+    }
+    parser_print(parser);
+    ++stage;
+}    
+
 int main(int argc, char const **argv)
 {
     assert(argc > 1);
@@ -46,15 +62,12 @@ int main(int argc, char const **argv)
     }
     type_registry_init();
     parser_t parser = parse(sb_as_slice(contents_maybe.value));
-    if (parser.errors.len > 0) {
-        for (size_t ix = 0; ix < parser.errors.len; ++ix) {
-            slice_t msg = sb_as_slice(parser.errors.items[ix]);
-            printf("%.*s\n", (int) msg.len, msg.items);
-        }
-        exit(1);
-    }
-    parser_print(&parser);
+    report("Parsing", &parser);
     parser_normalize(&parser);
-    parser_print(&parser);
+    report("Normalizing", &parser);
+    do {    
+	parser_bind(&parser);
+    } while (!parser_bound_type(&parser, parser.root).ok && parser.bound != 0);
+    report("Binding", &parser);
     return 0;
 }

@@ -10,6 +10,7 @@
 #include "da.h"
 #include "slice.h"
 #include "type.h"
+#include <stdint.h>
 
 typedef DA(struct _value) values_t;
 
@@ -36,7 +37,11 @@ typedef struct _value {
 OPTDEF(value_t);
 
 value_t     make_value_from_string(slice_t str);
+opt_value_t make_value_from_signed(nodeptr type, int64_t v);
+opt_value_t make_value_from_unsigned(nodeptr type, uint64_t v);
+opt_value_t make_value_from_double(nodeptr type, double d);
 void        value_print(FILE *f, value_t value);
+opt_value_t value_coerce(value_t value, nodeptr type);
 opt_value_t evaluate(value_t v1, operator_t op, value_t v2);
 
 #endif /* __VALUE_H__ */

@@ -13,25 +13,33 @@
 #define __PARSER_H__
 
 typedef struct _parser {
-    lexer_t   lexer;
-    nodes_t   nodes;
-    nodeptr   root;
-    strings_t errors;
+    lexer_t      lexer;
+    nodes_t      nodes;
+    nodeptr      root;
+    nodeptrs     namespaces;
+    strings_t    errors;
+    int          bound;
 } parser_t;
 
 parser_t        parse(slice_t text);
 void            parser_print(parser_t *parser);
 nodeptr         parser_normalize(parser_t *parser);
+nodeptr         parser_bind(parser_t *parser);
 nodeptr         parser_append_node(parser_t *this, node_t n);
 node_t         *parser_node(parser_t *parser, nodeptr n);
 tokenlocation_t parser_location(parser_t *this, nodeptr n);
 tokenlocation_t parser_location_merge(parser_t *this, nodeptr first_node, nodeptr second_node);
 void            parser_verror(parser_t *parser, tokenlocation_t location, char const *fmt, va_list args);
 void            parser_error(parser_t *parser, tokenlocation_t location, char const *fmt, ...);
+nodeptr         parser_resolve(parser_t *parser, slice_t name);
+void            parser_add_name(parser_t *parser, slice_t name, nodeptr type);
 
 #define parser_add_node(parser, nt, loc, ...) \
-    parser_append_node((parser), (node_t) { .node_type = (nt), .location = (loc), __VA_ARGS__ })
-#define parser_copy_node(parser, node, nt, ...) \
-    parser_append_node((parser), (node_t) { .node_type = (nt), .location = (node).location, __VA_ARGS__ })
+    parser_append_node((parser), (node_t) { .node_type = (nt), .location = (loc), .namespace = { 0 }, __VA_ARGS__ })
+#define parser_node_type(parser, n) (parser_node((parser), (n))->node_type)
+#define parser_bound_type(parser, n) (parser_node((parser), (n))->bound_type)
+
+#define N(n) parser_node(parser, (n))
+#define NT(n) parser_node_type(parser, (n))
 
 #endif /* __PARSER_H__ */

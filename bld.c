@@ -10,14 +10,18 @@ Nob_Cmd cmd = { 0 };
 #define APP_SOURCES(S) \
     S(elrond)          \
     S(parser)          \
+    S(operators)       \
     S(node)            \
+    S(typespec)        \
     S(normalize)       \
     S(type)            \
-    S(value)
+    S(value)           \
+    S(bind)
 
 int main(int argc, char **argv)
 {
     NOB_GO_REBUILD_URSELF(argc, argv);
+    mkdir_if_not_exists("build");
     char *cc = getenv("CC");
     if (cc == NULL) {
         cc = "cc";

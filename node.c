@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "node.h"
 #include "operators.h"
 #include "slice.h"
+#include "type.h"
 #include "value.h"
 
 char const *node_type_name(nodetype_t type)
@@ -67,6 +70,13 @@ void Continue_print(FILE *f, nodes_t tree, node_t *n, int indent)
     fprintf(f, "\n");
 }
 
+void Call_print(FILE *f, nodes_t tree, node_t *n, int indent)
+{
+    fprintf(f, "\n");
+    node_print(f, "Callable", tree, n->function_call.callable, indent + 4);
+    node_print(f, "Arguments", tree, n->function_call.arguments, indent + 4);
+}
+
 void Constant_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
@@ -88,6 +98,16 @@ void Embed_print(FILE *f, nodes_t tree, node_t *n, int indent)
     (void) tree;
     (void) indent;
     fprintf(f, SL "\n", SLARG(n->identifier));
+}
+
+void ExpressionList_print(FILE *f, nodes_t tree, node_t *n, int indent)
+{
+    fprintf(f, "%zu\n", n->expression_list.len);
+    char buf[32];
+    for (size_t ix = 0; ix < n->expression_list.len; ++ix) {
+        snprintf(buf, 31, "Param %zu", ix);
+	node_print(f, buf, tree, n->expression_list.items[ix], indent + 4);
+    }        
 }
 
 void Enum_print(FILE *f, nodes_t tree, node_t *n, int indent)
@@ -121,6 +141,7 @@ void ForeignFunction_print(FILE *f, nodes_t tree, node_t *n, int indent)
 void Function_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
     fprintf(f, SL "\n", SLARG(n->function.name));
+    node_print(f, "Sig", tree, n->function.signature, indent + 4);
     node_print(f, "Impl", tree, n->function.implementation, indent + 4);
 }
 
@@ -147,6 +168,29 @@ void Number_print(FILE *f, nodes_t tree, node_t *n, int indent)
     fprintf(f, SL "\n", SLARG(n->number.number));
 }
 
+void Parameter_print(FILE *f, nodes_t tree, node_t *n, int indent)
+{
+    (void) indent;
+    fprintf(f, SL ": " SL, SLARG(n->variable_declaration.name), SLARG(typespec_to_string(tree, n->variable_declaration.type)));
+    fprintf(f, "\n");
+}
+
+void Return_print(FILE *f, nodes_t tree, node_t *n, int indent)
+{
+    fprintf(f, "\n");
+    node_print(f, NULL, tree, n->statement, indent + 4);
+}
+
+void Signature_print(FILE *f, nodes_t tree, node_t *n, int indent)
+{
+    fprintf(f, "func() ");
+    fprintf(f, SL, SLARG(typespec_to_string(tree, n->signature.return_type)));
+    fprintf(f, "\n");
+    for (size_t ix = 0; ix < n->signature.parameters.len; ++ix) {
+        node_print(f, "Param", tree, n->signature.parameters.items[ix], indent + 4);
+    }
+}
+
 void StatementBlock_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
     fprintf(f, "\n");
@@ -167,17 +211,22 @@ void String_print(FILE *f, nodes_t tree, node_t *n, int indent)
     S(BinaryExpression)   \
     S(BoolConstant)       \
     S(Break)              \
+    S(Call)               \
     S(Constant)           \
     S(Continue)           \
     S(Defer)              \
     S(Embed)              \
     S(Enum)               \
     S(EnumValue)          \
+    S(ExpressionList)     \
     S(ForeignFunction)    \
     S(Module)             \
     S(Number)             \
+    S(Parameter)          \
+    S(Return)             \
     S(Function)           \
     S(Identifier)         \
+    S(Signature)          \
     S(StatementBlock)     \
     S(String)
 
@@ -219,5 +268,8 @@ void node_print(FILE *f, char const *prefix, nodes_t tree, nodeptr ix,
         n->location.line + 1,
         n->location.column + 1,
         SLARG(C(node_type_name(n->node_type))));
+    if (n->bound_type.ok) {
+        fprintf(f, SL " | ", SLARG(type_to_string(n->bound_type)));
+    }
     print_fncs[n->node_type](f, tree, n, indent);
 }

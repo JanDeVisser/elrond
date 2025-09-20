@@ -13,6 +13,7 @@
 #include "slice.h"
 
 #define TYPEKINDS(S) \
+    S(AliasType)     \
     S(ArrayType)     \
     S(BoolType)      \
     S(DynArrayType)  \
@@ -110,6 +111,7 @@ typedef struct _type {
     type_kind_t kind;
     slice_t     str;
     union {
+        nodeptr          alias_of;
         nodeptr          array_of;
         array_type_t     array_type;
         enum_type_t      enum_type;
@@ -126,6 +128,8 @@ typedef struct _type {
     };
 } type_t;
 
+OPTDEF(type_t);
+
 #undef S
 #define S(W) extern nodeptr F##W;
 FLOATWIDTHS(S)
@@ -136,21 +140,43 @@ FLOATWIDTHS(S)
 INTWIDTHS(S)
 #undef S
 
+#define IX_F32 0
+#define IX_F64 1
+#define IX_U8 2
+#define IX_I8 3
+#define IX_U16 4
+#define IX_I16 5
+#define IX_U32 6
+#define IX_I32 7
+#define IX_U64 8
+#define IX_I64 9
+#define IX_Boolean 10
+#define IX_String 11
+#define IX_StringBuilder 12
+#define IX_CString 13
+#define IX_Character 14
+#define IX_Pointer 15
+#define IX_Null 16
+#define IX_Void 17
+#define IX_VoidFnc 18
+
 extern nodeptr Boolean;
-extern nodeptr Null;
 extern nodeptr String;
 extern nodeptr StringBuilder;
 extern nodeptr CString;
 extern nodeptr Character;
+extern nodeptr Null;
 extern nodeptr Void;
 extern nodeptr Pointer;
 extern nodeptr VoidFnc;
 
 intptr_t align_at(intptr_t alignment, intptr_t value);
 intptr_t words_needed(intptr_t word_size, intptr_t bytes);
+slice_t  type_kind_name(nodeptr p);
 slice_t  type_to_string(nodeptr p);
 intptr_t type_align_of(nodeptr p);
 intptr_t type_size_of(nodeptr p);
+nodeptr  alias_of(nodeptr aliased);
 nodeptr  referencing(nodeptr type);
 nodeptr  slice_of(nodeptr type);
 nodeptr  array_of(nodeptr type, size_t size);
@@ -162,6 +188,16 @@ nodeptr  signature(nodeptrs parameters, nodeptr result);
 nodeptr  typelist_of(nodeptrs types);
 nodeptr  struct_of(struct_fields_t fields);
 type_t  *get_type(nodeptr p);
+nodeptr  find_type(slice_t name);
 void     type_registry_init();
+
+#define type_kind(type) (get_type((type))->kind)
+#define type_is_int(type) (type_kind((type)) == TYPK_IntType)
+#define type_is_number(type)                                \
+    (                                                       \
+        {                                                   \
+            type_kind_t __k = type_kind((type));            \
+            (__k == TYPK_IntType || __k == TYPK_FloatType); \
+        })
 
 #endif /* __TYPE_H__ */

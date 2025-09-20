@@ -128,6 +128,7 @@ OPTDEF(size_t);
 OPTDEF(long);
 typedef unsigned long ulong;
 OPTDEF(ulong);
+OPTDEF(double);
 
 typedef opt_size_t nodeptr;
 #ifndef __cplusplus

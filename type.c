@@ -30,74 +30,69 @@ static type_vtable_t vtables[] = {
 #undef S
 };
 
-nodeptr F32 = { 0 };
-nodeptr F64 = { 0 };
-#undef S
-#define S(W)              \
-    nodeptr I##W = { 0 }; \
-    nodeptr U##W = { 0 };
-INTWIDTHS(S)
-#undef S
-nodeptr Boolean = { 0 };
-nodeptr Null = { 0 };
-nodeptr String = { 0 };
-nodeptr StringBuilder = { 0 };
-nodeptr CString = { 0 };
-nodeptr Character = { 0 };
-nodeptr Void = { 0 };
-nodeptr Pointer = { 0 };
-nodeptr VoidFnc = { 0 };
+nodeptr F32 = OPTVAL(size_t, IX_F32);
+nodeptr F64 = OPTVAL(size_t, IX_F64);
+nodeptr U8 = OPTVAL(size_t, IX_U8);
+nodeptr I8 = OPTVAL(size_t, IX_I8);
+nodeptr U16 = OPTVAL(size_t, IX_U16);
+nodeptr I16 = OPTVAL(size_t, IX_I16);
+nodeptr U32 = OPTVAL(size_t, IX_U32);
+nodeptr I32 = OPTVAL(size_t, IX_I32);
+nodeptr U64 = OPTVAL(size_t, IX_U64);
+nodeptr I64 = OPTVAL(size_t, IX_I64);
+nodeptr Boolean = OPTVAL(size_t, IX_Boolean);
+nodeptr String = OPTVAL(size_t, IX_String);
+nodeptr StringBuilder = OPTVAL(size_t, IX_StringBuilder);
+nodeptr CString = OPTVAL(size_t, IX_CString);
+nodeptr Character = OPTVAL(size_t, IX_Character);
+nodeptr Null = OPTVAL(size_t, IX_Null);
+nodeptr Void = OPTVAL(size_t, IX_Void);
+nodeptr Pointer = OPTVAL(size_t, IX_Pointer);
+nodeptr VoidFnc = OPTVAL(size_t, IX_VoidFnc);
 
-type_t _F32 = {
-    .kind = TYPK_FloatType,
-    .str = { 0 },
-    .float_width = FW_32,
+int_type_t _U8 = {
+    .code = IC_U8, .is_signed = false, .width_bits = 8, .max_value = 0xFF, .min_value = 0
 };
-type_t _F64 = {
-    .kind = TYPK_FloatType,
-    .str = { 0 },
-    .float_width = FW_32,
+int_type_t _U16 = {
+    .code = IC_U16, .is_signed = false, .width_bits = 16, .max_value = 0xFFFF, .min_value = 0
 };
-type_t _U8 = {
-    .kind = TYPK_IntType,
-    .str = { 0 },
-    .int_type = { .code = IC_U8, .is_signed = false, .width_bits = 8, .max_value = 0xFF, .min_value = 0 }
+int_type_t _U32 = {
+    .code = IC_U32, .is_signed = false, .width_bits = 32, .max_value = 0xFFFFFFFF, .min_value = 0
 };
-type_t _U16 = {
-    .kind = TYPK_IntType,
-    .str = { 0 },
-    .int_type = { .code = IC_U16, .is_signed = false, .width_bits = 16, .max_value = 0xFFFF, .min_value = 0 }
+int_type_t _U64 = {
+    .code = IC_U64, .is_signed = false, .width_bits = 64, .max_value = 0xFFFFFFFFFFFFFFFF, .min_value = 0
 };
-type_t _U32 = {
-    .kind = TYPK_IntType,
-    .str = { 0 },
-    .int_type = { .code = IC_U32, .is_signed = false, .width_bits = 32, .max_value = 0xFFFFFFFF, .min_value = 0 }
+int_type_t _I8 = {
+    .code = IC_I8, .is_signed = true, .width_bits = 8, .max_value = 0x7FUL, .min_value = -0x80L
 };
-type_t _U64 = {
-    .kind = TYPK_IntType,
-    .str = { 0 },
-    .int_type = { .code = IC_U64, .is_signed = false, .width_bits = 64, .max_value = 0xFFFFFFFFFFFFFFFF, .min_value = 0 }
+int_type_t _I16 = {
+    .code = IC_I16, .is_signed = true, .width_bits = 16, .max_value = 0x7FFFFUL, .min_value = -0x8000L
 };
-type_t _I8 = {
-    .kind = TYPK_IntType,
-    .str = { 0 },
-    .int_type = { .code = IC_I8, .is_signed = true, .width_bits = 8, .max_value = 0x7F, .min_value = -0x80 }
+int_type_t _I32 = {
+    .code = IC_I32, .is_signed = true, .width_bits = 32, .max_value = 0x7FFFFFFFUL, .min_value = -0x80000000L
 };
-type_t _I16 = {
-    .kind = TYPK_IntType,
-    .str = { 0 },
-    .int_type = { .code = IC_I16, .is_signed = true, .width_bits = 16, .max_value = 0x7FFFF, .min_value = -0x8000 }
+int_type_t _I64 = {
+    .code = IC_I64, .is_signed = true, .width_bits = 64, .max_value = 0x7FFFFFFFFFFFFFFFUL, .min_value = (int64_t) 0x8000000000000000UL
 };
-type_t _I32 = {
-    .kind = TYPK_IntType,
-    .str = { 0 },
-    .int_type = { .code = IC_I32, .is_signed = true, .width_bits = 32, .max_value = 0x7FFFFFFF, .min_value = -0x80000000 }
-};
-type_t _I64 = {
-    .kind = TYPK_IntType,
-    .str = { 0 },
-    .int_type = { .code = IC_I64, .is_signed = true, .width_bits = 64, .max_value = 0x7FFFFFFFFFFFFFFF, .min_value = (int64_t) 0x8000000000000000UL }
-};
+
+typedef struct _type_name {
+    slice_t name;
+    nodeptr type;
+} type_name_t;
+
+#define make_type(k, ...)                                                          \
+    (                                                                              \
+        {                                                                          \
+            type_t __t = { .kind = (k), .str = { 0 }, __VA_ARGS__ };               \
+            dynarr_append(&type_registry, __t);                                    \
+            nodeptr __ret = OPTVAL(size_t, type_registry.len - 1);                 \
+            printf("Created type %zu: %d " SL "\n",                                \
+                __ret.value, get_type(__ret)->kind, SLARG(type_kind_name(__ret))); \
+            __ret;                                                                 \
+        })
+
+static DA(type_t) type_registry = { 0 };
+static DA(type_name_t) type_by_name = { 0 };
 
 /* ------------------------------------------------------------------------ */
 
@@ -111,6 +106,35 @@ intptr_t words_needed(intptr_t word_size, intptr_t bytes)
 {
     size_t ret = bytes / word_size;
     return (bytes % word_size != 0) ? ret + 1 : ret;
+}
+
+/* ------------------------------------------------------------------------ */
+
+slice_t AliasType_to_string(type_t *t)
+{
+    nodeptr aliasof = t->alias_of;
+    for (t = get_type(t->alias_of); t->kind == TYPK_AliasType; t = get_type(t->alias_of)) {
+        aliasof = t->alias_of;
+    }
+    return sb_as_slice(sb_format("aliasof(" SL ")", type_to_string(aliasof)));
+}
+
+intptr_t AliasType_size_of(type_t *t)
+{
+    nodeptr aliasof = t->alias_of;
+    for (t = get_type(t->alias_of); t->kind == TYPK_AliasType; t = get_type(t->alias_of)) {
+        aliasof = t->alias_of;
+    }
+    return type_size_of(aliasof);
+}
+
+intptr_t AliasType_align_of(type_t *t)
+{
+    nodeptr aliasof = t->alias_of;
+    for (t = get_type(t->alias_of); t->kind == TYPK_AliasType; t = get_type(t->alias_of)) {
+        aliasof = t->alias_of;
+    }
+    return type_align_of(aliasof);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -137,7 +161,7 @@ intptr_t ArrayType_align_of(type_t *t)
 slice_t BoolType_to_string(type_t *t)
 {
     (void) t;
-    return C("bool");
+    return C("boolean");
 }
 
 intptr_t BoolType_size_of(type_t *t)
@@ -516,6 +540,27 @@ intptr_t ZeroTerminatedArray_align_of(type_t *t)
 /* ------------------------------------------------------------------------ */
 /* ------------------------------------------------------------------------ */
 
+slice_t type_kind_name(nodeptr p)
+{
+    if (!p.ok) {
+        return C("type_kind_name of NULL type pointer");
+    }
+    if (p.value >= type_registry.len) {
+        static char msgbuffer[1024];
+        snprintf(msgbuffer, 1023, "type_kind_name of p = %zu, but only %zu types registered", p.value, type_registry.len);
+        return C(msgbuffer);
+    }
+    switch (get_type(p)->kind) {
+#undef S
+#define S(K)       \
+    case TYPK_##K: \
+        return C(#K);
+        TYPEKINDS(S)
+    default:
+        UNREACHABLE();
+    }
+}
+
 slice_t type_to_string(nodeptr p)
 {
     type_t *t = get_type(p);
@@ -538,16 +583,6 @@ intptr_t type_size_of(nodeptr p)
     return vtables[t->kind].size_of(t);
 }
 
-static DA(type_t) type_registry = { 0 };
-
-#define make_type(k, ...)                                            \
-    (                                                                \
-        {                                                            \
-            type_t __t = { .kind = (k), .str = { 0 }, __VA_ARGS__ }; \
-            dynarr_append(&type_registry, __t);                      \
-            OPTVAL(size_t, type_registry.len - 1);                   \
-        })
-
 nodeptr referencing(nodeptr type)
 {
     assert(type.ok && (type.value < type_registry.len));
@@ -558,6 +593,17 @@ nodeptr referencing(nodeptr type)
         }
     }
     return make_type(TYPK_ReferenceType, .referencing = type);
+}
+
+nodeptr alias_of(nodeptr aliased)
+{
+    for (size_t ix = 0; ix < type_registry.len; ++ix) {
+        if (type_registry.items[ix].kind == TYPK_AliasType
+            && type_registry.items[ix].alias_of.value == aliased.value) {
+            return OPTVAL(size_t, ix);
+        }
+    }
+    return make_type(TYPK_AliasType, .alias_of = aliased);
 }
 
 nodeptr slice_of(nodeptr type)
@@ -642,22 +688,23 @@ nodeptr signature(nodeptrs parameters, nodeptr result)
     }
     assert(result.ok && (result.value < type_registry.len));
     for (size_t ix = 0; ix < type_registry.len; ++ix) {
-        if (type_registry.items[ix].kind == TYPK_Signature
-            && type_registry.items[ix].signature_type.result.value == result.value
-            && type_registry.items[ix].signature_type.parameters.len == parameters.len) {
-            for (size_t ix = 0; ix < parameters.len; ++ix) {
-                if (parameters.items[ix].value
-                    != type_registry.items[ix].signature_type.parameters.items[ix].value) {
+        type_t *t = type_registry.items + ix;
+        if (t->kind == TYPK_Signature && t->signature_type.result.value == result.value && t->signature_type.parameters.len == parameters.len) {
+            bool all_matched = true;
+            for (size_t iix = 0; iix < parameters.len; ++iix) {
+                if (parameters.items[iix].value != t->signature_type.parameters.items[iix].value) {
+                    all_matched = false;
                     break;
                 }
-                if (ix == parameters.len - 1) {
-                    return OPTVAL(size_t, ix);
-                }
+            }
+            if (all_matched) {
+                dynarr_free(&parameters);
+                return OPTVAL(size_t, ix);
             }
         }
     }
     return make_type(
-        TYPK_ResultType,
+        TYPK_Signature,
         .signature_type = { .parameters = parameters, .result = result });
 }
 
@@ -669,14 +716,17 @@ nodeptr typelist_of(nodeptrs types)
     for (size_t ix = 0; ix < type_registry.len; ++ix) {
         if (type_registry.items[ix].kind == TYPK_TypeList
             && type_registry.items[ix].type_list_types.len == types.len) {
+            bool all_matched = true;
             for (size_t ix = 0; ix < types.len; ++ix) {
                 if (types.items[ix].value
                     != type_registry.items[ix].type_list_types.items[ix].value) {
+                    all_matched = false;
                     break;
                 }
-                if (ix == types.len - 1) {
-                    return OPTVAL(size_t, ix);
-                }
+            }
+            if (all_matched) {
+                dynarr_free(&types);
+                return OPTVAL(size_t, ix);
             }
         }
     }
@@ -687,18 +737,18 @@ nodeptr struct_of(struct_fields_t fields)
 {
     for (size_t ix = 0; ix < type_registry.len; ++ix) {
         type_t *t = type_registry.items + ix;
-        if (t->kind == TYPK_StructType) {
-            if (t->struct_fields.len != fields.len) {
-                continue;
-            }
+        if (t->kind == TYPK_StructType && t->struct_fields.len == fields.len) {
+            bool all_matched = true;
             for (size_t fix = 0; fix < fields.len; ++fix) {
                 if (fields.items[fix].type.value != t->struct_fields.items[fix].type.value
                     || !slice_eq(fields.items[fix].name, t->struct_fields.items[fix].name)) {
+                    all_matched = false;
                     break;
                 }
-                if (fix == fields.len - 1) {
-                    return OPTVAL(size_t, ix);
-                }
+            }
+            if (all_matched) {
+                dynarr_free(&fields);
+                return OPTVAL(size_t, ix);
             }
         }
     }
@@ -707,31 +757,38 @@ nodeptr struct_of(struct_fields_t fields)
 
 void type_registry_init()
 {
+#define MAKE_INTERNAL(T, N, K, ...)                                                   \
+    {                                                                                 \
+        type_t __t = { .kind = (K), .str = { 0 }, __VA_ARGS__ };                      \
+        dynarr_append(&type_registry, __t);                                           \
+        nodeptr __ix = OPTVAL(size_t, type_registry.len - 1);                         \
+        assert((T).ok &&__ix.value == (T).value);                                     \
+        dynarr_append(&type_by_name, ((type_name_t) { .name = C(#N), .type = (T) })); \
+    }
 #undef S
-#define S(W)                              \
-    dynarr_append(&type_registry, _F##W); \
-    F##W = OPTVAL(size_t, type_registry.len - 1);
+#define S(W) MAKE_INTERNAL(F##W, f##W, TYPK_FloatType, .float_width = FW_##W);
     FLOATWIDTHS(S)
 #undef S
-#define S(W)                                      \
-    dynarr_append(&type_registry, _U##W);         \
-    U##W = OPTVAL(size_t, type_registry.len - 1); \
-    dynarr_append(&type_registry, _I##W);         \
-    I##W = OPTVAL(size_t, type_registry.len - 1);
+#define S(W)                                                    \
+    MAKE_INTERNAL(U##W, u##W, TYPK_IntType, .int_type = _U##W); \
+    MAKE_INTERNAL(I##W, i##W, TYPK_IntType, .int_type = _I##W);
     INTWIDTHS(S)
 #undef S
-    Boolean = make_type(TYPK_BoolType, .array_of = { 0 });
-    String = make_type(TYPK_SliceType, .slice_of = U8);
-    StringBuilder = make_type(TYPK_DynArrayType, .array_of = U8);
-    CString = make_type(TYPK_ZeroTerminatedArray, .array_of = U8);
-    Pointer = make_type(TYPK_PointerType, .array_of = { 0 });
-    Null = make_type(TYPK_VoidType, .array_of = { 0 });
-    Void = Null;
-    VoidFnc = make_type(TYPK_Signature, .signature_type = {
-                                            .parameters = { 0 },
-                                            .result = Void,
-                                        });
+    MAKE_INTERNAL(Boolean, boolean, TYPK_BoolType, .array_of = { 0 });
+    MAKE_INTERNAL(String, string, TYPK_SliceType, .slice_of = U8);
+    MAKE_INTERNAL(StringBuilder, string_builder, TYPK_DynArrayType, .array_of = U8);
+    MAKE_INTERNAL(CString, cstring, TYPK_ZeroTerminatedArray, .array_of = U8);
+    MAKE_INTERNAL(Character, char, TYPK_AliasType, .alias_of = U8);
+    MAKE_INTERNAL(Pointer, pointer, TYPK_PointerType, .array_of = { 0 });
+    MAKE_INTERNAL(Null, null, TYPK_VoidType, .array_of = { 0 });
+    MAKE_INTERNAL(Void, void, TYPK_AliasType, .alias_of = Null);
+    MAKE_INTERNAL(VoidFnc, void_fnc, TYPK_Signature, .signature_type = {
+                                                         .parameters = { 0 },
+                                                         .result = Void,
+                                                     });
 }
+
+#define GETTYPE(p) (type_registry.items + (p).value)
 
 type_t *get_type(nodeptr p)
 {
@@ -739,5 +796,30 @@ type_t *get_type(nodeptr p)
         type_registry_init();
     }
     assert(p.ok && p.value < type_registry.len);
-    return type_registry.items + p.value;
+    type_t *t = GETTYPE(p);
+    while (t->kind == TYPK_AliasType) {
+        t = GETTYPE(t->alias_of);
+    }
+    return t;
+}
+
+nodeptr find_type(slice_t name)
+{
+    printf("find_type(" SL ")\n", SLARG(name));
+    while (true) {
+        for (size_t ix = 0; ix < type_by_name.len; ++ix) {
+            if (slice_eq(name, type_by_name.items[ix].name)) {
+                nodeptr type = type_by_name.items[ix].type;
+                assert(type.ok && type.value < type_registry.len);
+                type_t *t = GETTYPE(type);
+                while (t->kind == TYPK_AliasType) {
+                    type = t->alias_of;
+                    t = GETTYPE(type);
+                }
+                printf("find_type: found %zu\n", type.value);
+                return type;
+            }
+        }
+    }
+    return nullptr;
 }

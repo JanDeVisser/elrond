@@ -4,13 +4,238 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "value.h"
-#include "type.h"
+#include <stdint.h>
 #include <stdio.h>
+
+#include "node.h"
+#include "type.h"
+#include "value.h"
+
+static opt_long   value_as_signed(value_t val);
+static opt_ulong  value_as_unsigned(value_t val);
+static opt_double value_as_double(value_t val);
 
 value_t make_value_from_string(slice_t str)
 {
     return (value_t) { .type = String, .slice = str };
+}
+
+opt_value_t make_value_from_signed(nodeptr type, int64_t v)
+{
+    type_t *t = get_type(type);
+    value_t ret = { .type = type };
+    switch (t->kind) {
+    case TYPK_IntType: {
+        if ((v > 0 && (uint64_t) v > t->int_type.max_value) || v < t->int_type.min_value) {
+            return OPTNULL(value_t);
+        }
+        switch (t->int_type.code) {
+#undef S
+#define S(W)                        \
+    case IC_U##W:                   \
+        ret.u##W = (uint##W##_t) v; \
+        break;                      \
+    case IC_I##W:                   \
+        ret.i##W = (int##W##_t) v;  \
+        break;
+            INTWIDTHS(S)
+#undef S
+        default:
+            UNREACHABLE();
+        }
+        return OPTVAL(value_t, ret);
+    }
+    case TYPK_FloatType:
+        return make_value_from_double(type, (double) v);
+    case TYPK_BoolType:
+        ret.boolean = v != 0;
+        return OPTVAL(value_t, ret);
+    default:
+        return OPTNULL(value_t);
+    }
+}
+
+opt_value_t make_value_from_unsigned(nodeptr type, uint64_t v)
+{
+    type_t *t = get_type(type);
+    value_t ret = { .type = type };
+    switch (t->kind) {
+    case TYPK_IntType: {
+        if (v > t->int_type.max_value) {
+            return OPTNULL(value_t);
+        }
+        switch (t->int_type.code) {
+#undef S
+#define S(W)                        \
+    case IC_U##W:                   \
+        ret.u##W = (uint##W##_t) v; \
+        break;                      \
+    case IC_I##W:                   \
+        ret.i##W = (int##W##_t) v;  \
+        break;
+            INTWIDTHS(S)
+#undef S
+        default:
+            UNREACHABLE();
+        }
+        return OPTVAL(value_t, ret);
+    }
+    case TYPK_FloatType:
+        return make_value_from_double(type, (double) v);
+    case TYPK_BoolType:
+        ret.boolean = v != 0;
+        return OPTVAL(value_t, ret);
+    default:
+        return OPTNULL(value_t);
+    }
+}
+
+opt_value_t make_value_from_double(nodeptr type, double d)
+{
+    type_t *t = get_type(type);
+    value_t ret = { .type = type };
+    switch (t->kind) {
+    case TYPK_IntType: {
+        if (d < (double) t->int_type.min_value || d > (double) t->int_type.max_value) {
+            return OPTNULL(value_t);
+        }
+        switch (t->int_type.code) {
+#undef S
+#define S(W)                        \
+    case IC_U##W:                   \
+        ret.u##W = (uint##W##_t) d; \
+        break;                      \
+    case IC_I##W:                   \
+        ret.i##W = (int##W##_t) d;  \
+        break;
+            INTWIDTHS(S)
+#undef S
+        default:
+            UNREACHABLE();
+        }
+        return OPTVAL(value_t, ret);
+    }
+    case TYPK_FloatType:
+        switch (t->float_width) {
+        case FW_32:
+            ret.f32 = (float) d;
+            break;
+        case FW_64:
+            ret.f64 = d;
+            break;
+        default:
+            UNREACHABLE();
+        }
+        return OPTVAL(value_t, ret);
+    default:
+        return OPTNULL(value_t);
+    }
+}
+
+opt_long value_as_signed(value_t val)
+{
+    type_t *t = get_type(val.type);
+    switch (t->kind) {
+    case TYPK_IntType:
+        switch (t->int_type.code) {
+#undef S
+#define S(W)                                         \
+    case IC_I##W:                                    \
+        return OPTVAL(long, (int64_t) val.i##W);     \
+    case IC_U##W: {                                  \
+        uint64_t v = (uint64_t) val.u##W;            \
+        if (v > get_type(I64)->int_type.max_value) { \
+            return OPTNULL(long);                    \
+        }                                            \
+        return OPTVAL(long, (int64_t) val.u##W);     \
+    }
+            INTWIDTHS(S)
+#undef S
+        default:
+            printf("%d\n", t->int_type.code);
+            UNREACHABLE();
+        }
+    case TYPK_FloatType: {
+        double d = TRYOPT_ADAPT(double, value_as_double(val), OPTNULL(long));
+        if (d < (double) (get_type(U64)->int_type.min_value) || d > (double) (get_type(U64)->int_type.max_value)) {
+            return OPTNULL(long);
+        }
+        return OPTVAL(long, (int64_t) d);
+    }
+    case TYPK_BoolType:
+        return OPTVAL(long, val.boolean ? 1 : 0);
+    default:
+        return OPTNULL(long);
+    }
+}
+
+opt_ulong value_as_unsigned(value_t val)
+{
+    type_t *t = get_type(val.type);
+    switch (t->kind) {
+    case TYPK_IntType:
+        switch (t->int_type.code) {
+#undef S
+#define S(W)                                       \
+    case IC_U##W:                                  \
+        return (uint64_t) val.u##W;                \
+    case IC_I##W: {                                \
+        int64_t v = (int64_t) val.i##W;            \
+        if (v < 0) {                               \
+            return OPTNULL(long);                  \
+        }                                          \
+        return OPTVAL(ulong, (uint64_t) val.u##W); \
+    }                                              \
+        INTWIDTHS(S)
+#undef S
+        default:
+            UNREACHABLE();
+        }
+    case TYPK_FloatType: {
+        double d = TRYOPT_ADAPT(double, value_as_double(val), OPTNULL(ulong));
+        if (d < 0 || d > (double) (get_type(U64)->int_type.max_value)) {
+            return OPTNULL(ulong);
+        }
+        return OPTVAL(ulong, (int64_t) d);
+    }
+    case TYPK_BoolType:
+        return OPTVAL(ulong, val.boolean ? 1 : 0);
+    default:
+        return OPTNULL(ulong);
+    }
+}
+
+opt_double value_as_double(value_t val)
+{
+    type_t *t = get_type(val.type);
+    switch (t->kind) {
+    case TYPK_IntType:
+        switch (t->int_type.code) {
+#undef S
+#define S(W)                                      \
+    case IC_U##W:                                 \
+        return OPTVAL(double, (double) val.u##W); \
+    case IC_I##W:                                 \
+        return OPTVAL(double, (double) val.i##W);
+            INTWIDTHS(S)
+#undef S
+        default:
+            UNREACHABLE();
+        }
+    case TYPK_FloatType:
+        switch (t->float_width) {
+        case FW_32:
+            return OPTVAL(double, (double) val.f32);
+        case FW_64:
+            return OPTVAL(double, val.f64);
+        default:
+            UNREACHABLE();
+        }
+    case TYPK_BoolType:
+        return OPTVAL(double, val.boolean ? 1.0 : 0.0);
+    default:
+        return OPTNULL(double);
+    }
 }
 
 void value_print(FILE *f, value_t value)
@@ -73,6 +298,32 @@ void value_print(FILE *f, value_t value)
     }
 }
 
+opt_value_t value_coerce(value_t value, nodeptr type)
+{
+    if (value.type.value == type.value) {
+        return OPTVAL(value_t, value);
+    }
+    type_t *from = get_type(value.type);
+    value_t ret = { .type = type };
+    switch (from->kind) {
+    case TYPK_IntType:
+        if (from->int_type.is_signed) {
+            int64_t v = TRYOPT_ADAPT(long, value_as_signed(value), OPTNULL(value_t));
+            return make_value_from_signed(type, v);
+        } else {
+            uint64_t v = TRYOPT_ADAPT(ulong, value_as_unsigned(value), OPTNULL(value_t));
+            return make_value_from_unsigned(type, v);
+        }
+    case TYPK_FloatType: {
+        double d = TRYOPT_ADAPT(double, value_as_double(value), OPTNULL(value_t));
+        return make_value_from_double(type, d);
+    }
+    default:
+        return OPTNULL(value_t);
+    }
+    return OPTVAL(value_t, ret);
+}
+
 #undef S
 #define S(O) \
     static opt_value_t evaluate_##O(value_t v1, value_t v2);
@@ -95,9 +346,26 @@ opt_value_t evaluate(value_t v1, operator_t op, value_t v2)
 
 opt_value_t evaluate_Add(value_t v1, value_t v2)
 {
-    (void) v1;
-    (void) v2;
-    return OPTNULL(value_t);
+    type_t *t1 = get_type(v1.type);
+    switch (t1->kind) {
+    case TYPK_IntType:
+        if (t1->int_type.is_signed) {
+            int64_t i1 = UNWRAP(long, value_as_signed(v1));
+            int64_t i2 = TRYOPT_ADAPT(long, value_as_signed(v2), OPTNULL(value_t));
+            return make_value_from_signed(v1.type, i1 + i2);
+        } else {
+            uint64_t i1 = UNWRAP(long, value_as_signed(v1));
+            uint64_t i2 = TRYOPT_ADAPT(ulong, value_as_unsigned(v2), OPTNULL(value_t));
+            return make_value_from_unsigned(v1.type, i1 + i2);
+        }
+    case TYPK_FloatType: {
+        double d1 = UNWRAP(double, value_as_double(v1));
+        double d2 = TRYOPT_ADAPT(double, value_as_double(v2), OPTNULL(value_t));
+        return make_value_from_double(v1.type, d1 + d2);
+    }
+    default:
+        return OPTNULL(value_t);
+    }
 }
 
 opt_value_t evaluate_AddressOf(value_t v1, value_t v2)
@@ -213,6 +481,13 @@ opt_value_t evaluate_BinaryXor(value_t v1, value_t v2)
 }
 
 opt_value_t evaluate_Call(value_t v1, value_t v2)
+{
+    (void) v1;
+    (void) v2;
+    return OPTNULL(value_t);
+}
+
+opt_value_t evaluate_CallClose(value_t v1, value_t v2)
 {
     (void) v1;
     (void) v2;
@@ -380,7 +655,21 @@ opt_value_t evaluate_Subscript(value_t v1, value_t v2)
     return OPTNULL(value_t);
 }
 
+opt_value_t evaluate_SubscriptClose(value_t v1, value_t v2)
+{
+    (void) v1;
+    (void) v2;
+    return OPTNULL(value_t);
+}
+
 opt_value_t evaluate_Subtract(value_t v1, value_t v2)
+{
+    (void) v1;
+    (void) v2;
+    return OPTNULL(value_t);
+};
+
+opt_value_t evaluate_MAX(value_t v1, value_t v2)
 {
     (void) v1;
     (void) v2;

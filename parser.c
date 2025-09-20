@@ -12,10 +12,10 @@
 #include "operators.h"
 #include "parser.h"
 #include "slice.h"
+#include "type.h"
 
 bool               _parser_check_token(parser_t *parser, opt_token_t t, char const *fmt, ...);
 bool               _parser_check_node(parser_t *parser, tokenlocation_t location, nodeptr n, char const *fmt, ...);
-node_t            *parser_node(parser_t *parser, nodeptr n);
 nodeptr            parse_primary(parser_t *this);
 nodeptr            parse_expression(parser_t *this, int minprec);
 bool               check_op(parser_t *this);
@@ -567,7 +567,7 @@ bool check_op(parser_t *this)
     if (!token_matches(token, TK_Symbol) && !token_matches(token, TK_Keyword)) {
         return false;
     }
-    for (int ix = 0; ix < OPERATORS_SZ; ++ix) {
+    for (int ix = 0; ix < OP_MAX; ++ix) {
         operator_def_t operator= operators[ix];
         switch (operator.kind) {
         case TK_Symbol:
@@ -608,7 +608,7 @@ opt_operator_def_t check_op_by_position(parser_t *this, position_t pos)
     if (!token_matches(token, TK_Symbol) && !token_matches(token, TK_Keyword)) {
         return OPTNULL(operator_def_t);
     }
-    for (int ix = 0; ix < OPERATORS_SZ; ++ix) {
+    for (int ix = 0; ix < OP_MAX; ++ix) {
         operator_def_t operator= operators[ix];
         if (operator.position != pos) {
             continue;
@@ -1184,9 +1184,70 @@ void parser_print(parser_t *parser)
 
 nodeptr parser_normalize(parser_t *parser)
 {
+    dynarr_clear(&parser->namespaces);
     nodeptr p = node_normalize(parser, parser->root);
+    dynarr_clear(&parser->namespaces);
     if (p.ok) {
         parser->root = p;
     }
     return p;
+}
+
+nodeptr parser_bind(parser_t *parser)
+{
+    dynarr_clear(&parser->namespaces);
+    parser->bound = 0;
+    nodeptr p = node_bind(parser, parser->root);
+    dynarr_clear(&parser->namespaces);
+    return p;
+}
+
+void parser_names_dump(parser_t *parser)
+{
+    printf("\nNAMES\n-----------\n");
+    for (int ix = parser->namespaces.len - 1; ix >= 0; --ix) {
+        printf("Level %d: node %zu\n", ix, parser->namespaces.items[ix].value);        
+        namespace_t *ns = &N(parser->namespaces.items[ix])->namespace.value;
+        for (size_t iix = 0; iix < ns->len; ++iix) {
+            namespace_entry_t entry = ns->items[iix];
+	    printf("  " SL ": " SL "\n", SLARG(entry.name), SLARG(type_to_string(entry.type)));
+        }
+    }
+}    
+
+nodeptr parser_resolve(parser_t *parser, slice_t name)
+{
+    printf("parser_resolve(" SL ")\n", SLARG(name));
+    parser_names_dump(parser);
+    for (int ix = parser->namespaces.len - 1; ix >= 0; --ix) {
+        namespace_t *ns = &N(parser->namespaces.items[ix])->namespace.value;
+        for (size_t iix = 0; iix < ns->len; ++iix) {
+            namespace_entry_t entry = ns->items[iix];
+            if (slice_eq(entry.name, name)) {
+                printf("parser_resolve(" SL ") found %zu " SL " " SL,
+                    SLARG(name),
+                    entry.type.value,
+                    SLARG(type_kind_name(entry.type)),
+                    SLARG(type_to_string(entry.type)));
+                return entry.type;
+            }
+        }
+    }
+    return nullptr;
+}
+
+void parser_add_name(parser_t *parser, slice_t name, nodeptr type)
+{
+    assert(parser->namespaces.len > 0);
+    namespace_t *ns = &N(parser->namespaces.items[parser->namespaces.len - 1])->namespace.value;
+    for (size_t iix = 0; iix < ns->len; ++iix) {
+        namespace_entry_t *entry = ns->items + iix;
+        if (slice_eq(entry->name, name)) {
+            entry->type = type;
+            return;
+        }
+    }
+    printf("parser_add_name(" SL ", " SL " " SL ")\n", SLARG(name), SLARG(type_kind_name(type)), SLARG(type_to_string(type)));
+    dynarr_append(ns, ((namespace_entry_t) { .name = name, .type = type }));
+    parser_names_dump(parser);
 }

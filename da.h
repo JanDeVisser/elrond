@@ -34,6 +34,7 @@ typedef DA(char) sb_t;
 OPTDEF(sb_t);
 typedef DA(sb_t) strings_t;
 typedef DA(nodeptr) nodeptrs;
+OPTDEF(nodeptrs);
 
 #define dynarr_ensure(arr, C)                                            \
     do {                                                                 \
@@ -45,6 +46,7 @@ typedef DA(nodeptr) nodeptrs;
                 cap *= 1.6;                                              \
             }                                                            \
             void *newitems = malloc(cap * __elem_size);                  \
+            memset(newitems, 0, cap *__elem_size);                       \
             if (newitems == NULL) {                                      \
                 fprintf(stderr, "Out of memory.\n");                     \
                 abort();                                                 \
@@ -75,6 +77,13 @@ typedef DA(nodeptr) nodeptrs;
         (arr)->items[(arr)->len++] = (elem);  \
         ((arr)->len - 1);                     \
     } while (0);
+
+#define dynarr_pop(arr)       \
+    do {                      \
+        if ((arr)->len > 0) { \
+            --(arr)->len;     \
+        }                     \
+    } while (0)
 
 #define dynarr_cmp(arr1, arr2)                                                            \
     (                                                                                     \
