@@ -13,12 +13,12 @@
 #define __PARSER_H__
 
 typedef struct _parser {
-    lexer_t      lexer;
-    nodes_t      nodes;
-    nodeptr      root;
-    nodeptrs     namespaces;
-    strings_t    errors;
-    int          bound;
+    lexer_t   lexer;
+    nodes_t   nodes;
+    nodeptr   root;
+    nodeptrs  namespaces;
+    strings_t errors;
+    int       bound;
 } parser_t;
 
 parser_t        parse(slice_t text);
@@ -31,8 +31,8 @@ tokenlocation_t parser_location(parser_t *this, nodeptr n);
 tokenlocation_t parser_location_merge(parser_t *this, nodeptr first_node, nodeptr second_node);
 void            parser_verror(parser_t *parser, tokenlocation_t location, char const *fmt, va_list args);
 void            parser_error(parser_t *parser, tokenlocation_t location, char const *fmt, ...);
-nodeptr         parser_resolve(parser_t *parser, slice_t name);
-void            parser_add_name(parser_t *parser, slice_t name, nodeptr type);
+opt_name_t      parser_resolve(parser_t *parser, slice_t name);
+void            parser_add_name(parser_t *parser, slice_t name, nodeptr type, nodeptr decl);
 
 #define parser_add_node(parser, nt, loc, ...) \
     parser_append_node((parser), (node_t) { .node_type = (nt), .location = (loc), .namespace = { 0 }, __VA_ARGS__ })

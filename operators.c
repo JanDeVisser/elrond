@@ -82,7 +82,7 @@ operator_def_t operators[OP_MAX] = {
         .associativity = ASSOC_Right,
     },
     [OP_AssignDecrement] = {
-        .op = OP_AssignDecrement,        
+        .op = OP_AssignDecrement,
         .assignment_op_for = OPTVAL(operator_t, OP_Subtract),
         .kind = TK_Keyword,
         .keyword = KW_AssignDecrement,

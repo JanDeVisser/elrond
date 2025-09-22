@@ -37,6 +37,7 @@
     S(Null)                \
     S(Number)              \
     S(Parameter)           \
+    S(Program)             \
     S(PublicDeclaration)   \
     S(Return)              \
     S(Signature)           \
@@ -58,13 +59,14 @@ typedef enum _node_type {
 #undef S
 } nodetype_t;
 
-typedef struct _namespace_entry {
+typedef struct _name {
     slice_t name;
     nodeptr type;
-} namespace_entry_t;
+    nodeptr declaration;
+} name_t;
 
-OPTDEF(namespace_entry_t);
-typedef DA(namespace_entry_t) namespace_t;
+OPTDEF(name_t);
+typedef DA(name_t) namespace_t;
 OPTDEF(namespace_t);
 
 typedef struct _binary_expression {
@@ -76,6 +78,7 @@ typedef struct _binary_expression {
 typedef struct _call {
     nodeptr callable;
     nodeptr arguments;
+    nodeptr declaration;
 } call_t;
 
 typedef struct _enumeration {
@@ -103,11 +106,21 @@ typedef struct _function {
     nodeptr implementation;
 } function_t;
 
+typedef struct _indentifier {
+    slice_t id;
+    nodeptr declaration;
+} identifier_t;
+
 typedef struct _if_statement {
     nodeptr condition;
     nodeptr if_branch;
     nodeptr else_branch;
 } if_statement_t;
+
+typedef struct _module {
+    slice_t  name;
+    nodeptrs statements;
+} module_t;
 
 typedef struct _loop_statement {
     nodeptr     statement;
@@ -118,6 +131,12 @@ typedef struct _number {
     slice_t      number;
     numbertype_t number_type;
 } number_t;
+
+typedef struct _program {
+    slice_t  name;
+    nodeptrs modules;
+    nodeptrs statements;
+} program_t;
 
 typedef struct _public_declaration {
     slice_t name;
@@ -223,10 +242,12 @@ typedef struct _node {
         for_statement_t        for_statement;
         function_t             function;
         opt_slice_t            label;
-        slice_t                identifier;
+        identifier_t           identifier;
         if_statement_t         if_statement;
         loop_statement_t       loop_statement;
+        module_t               module;
         number_t               number;
+        program_t              program;
         slice_t                raw_text;
         variable_declaration_t variable_declaration;
         public_declaration_t   public_declaration;
@@ -253,5 +274,13 @@ char const *node_type_name(nodetype_t type);
 void        node_print(FILE *f, char const *prefix, nodes_t tree, nodeptr ix, int indent);
 nodeptr     node_normalize(struct _parser *parser, nodeptr ix);
 nodeptr     node_bind(struct _parser *parser, nodeptr ix);
+
+#define node_value_type(node)                    \
+    (                                            \
+        {                                        \
+            nodeptr __v = N((node))->bound_type; \
+            assert(__v.ok);                      \
+            type_value_type(__v);                \
+        });
 
 #endif /* __NODE_H__ */

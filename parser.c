@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "da.h"
 #include "elrondlexer.h"
 #include "node.h"
 #include "operators.h"
@@ -157,6 +158,10 @@ node_t *parser_node(parser_t *parser, nodeptr n)
 {
     if (!n.ok) {
         fprintf(stderr, "null node dereferenced\n");
+        abort();
+    }
+    if (n.value >= parser->nodes.len) {
+        fprintf(stderr, "node pointer `%zu` out of range 0..`%zu`\n", n.value, parser->nodes.len);
         abort();
     }
     return parser->nodes.items + n.value;
@@ -406,7 +411,7 @@ nodeptr parse_primary(parser_t *this)
             this,
             NT_Identifier,
             token.location,
-            .identifier = parser_text(this, token));
+            .identifier = { .id = parser_text(this, token) });
     } break;
     case TK_Keyword: {
         switch (token.keyword) {
@@ -778,7 +783,7 @@ nodeptr parse_preprocess(parser_t *this, nodetype_t node_type)
         this,
         node_type,
         tokenlocation_merge(kw.location, parser_current_location(this)),
-        .identifier = fname);
+        .identifier = { .id = fname });
 }
 
 nodeptr parse_break_continue(parser_t *this)
@@ -904,7 +909,7 @@ nodeptr parse_func(parser_t *this)
                     this,
                     NT_Identifier,
                     generic_tok.location,
-                    .identifier = generic_name));
+                    .identifier = { .id = generic_name }));
             if (lexer_accept_symbol(&this->lexer, '>')) {
                 break;
             }
@@ -956,7 +961,7 @@ nodeptr parse_func(parser_t *this)
             this,
             NT_ForeignFunction,
             foreign_func_tok.location,
-            .identifier = foreign_func);
+            .identifier = { .id = foreign_func });
     } else {
         impl = parser_check_node(this, parser_current_location(this), parse_statement(this), "Could not parse function implementation");
     }
@@ -999,7 +1004,7 @@ nodeptr parse_import(parser_t *this)
         this,
         NT_Import,
         tokenlocation_merge(import_token.location, parser_current_location(this)),
-        .identifier = sb_as_slice(path));
+        .identifier = { .id = sb_as_slice(path) });
 }
 
 nodeptr parse_loop(parser_t *this)
@@ -1171,7 +1176,17 @@ parser_t parse(slice_t text)
     lexer_push_source(&parser.lexer, text, c_scanner);
     nodeptrs block = { 0 };
     token_t  t = parse_statements(&parser, &block, parse_module_level_statement);
-    parser.root = parser_add_node(&parser, NT_Module, t.location, .statement_block = { .statements = block });
+    parser.root = parser_add_node(
+        &parser,
+        NT_Program,
+        t.location,
+        .program = { .name = C("anon"), .statements = { 0 } });
+    nodeptr mod = parser_add_node(
+        &parser,
+        NT_Module,
+        t.location,
+        .module = { .name = C("anon"), .statements = block });
+    dynarr_append(&parser_node(&parser, parser.root)->program.modules, mod);
     return parser;
 }
 
@@ -1206,48 +1221,49 @@ void parser_names_dump(parser_t *parser)
 {
     printf("\nNAMES\n-----------\n");
     for (int ix = parser->namespaces.len - 1; ix >= 0; --ix) {
-        printf("Level %d: node %zu\n", ix, parser->namespaces.items[ix].value);        
+        printf("Level %d: node %zu\n", ix, parser->namespaces.items[ix].value);
         namespace_t *ns = &N(parser->namespaces.items[ix])->namespace.value;
         for (size_t iix = 0; iix < ns->len; ++iix) {
-            namespace_entry_t entry = ns->items[iix];
-	    printf("  " SL ": " SL "\n", SLARG(entry.name), SLARG(type_to_string(entry.type)));
+            name_t entry = ns->items[iix];
+            printf("  " SL ": " SL "\n", SLARG(entry.name), SLARG(type_to_string(entry.type)));
         }
     }
-}    
+}
 
-nodeptr parser_resolve(parser_t *parser, slice_t name)
+opt_name_t parser_resolve(parser_t *parser, slice_t name)
 {
     printf("parser_resolve(" SL ")\n", SLARG(name));
     parser_names_dump(parser);
     for (int ix = parser->namespaces.len - 1; ix >= 0; --ix) {
         namespace_t *ns = &N(parser->namespaces.items[ix])->namespace.value;
         for (size_t iix = 0; iix < ns->len; ++iix) {
-            namespace_entry_t entry = ns->items[iix];
+            name_t entry = ns->items[iix];
             if (slice_eq(entry.name, name)) {
                 printf("parser_resolve(" SL ") found %zu " SL " " SL,
                     SLARG(name),
                     entry.type.value,
                     SLARG(type_kind_name(entry.type)),
                     SLARG(type_to_string(entry.type)));
-                return entry.type;
+                return OPTVAL(name_t, entry);
             }
         }
     }
-    return nullptr;
+    return (opt_name_t) { 0 };
 }
 
-void parser_add_name(parser_t *parser, slice_t name, nodeptr type)
+void parser_add_name(parser_t *parser, slice_t name, nodeptr type, nodeptr decl)
 {
     assert(parser->namespaces.len > 0);
     namespace_t *ns = &N(parser->namespaces.items[parser->namespaces.len - 1])->namespace.value;
     for (size_t iix = 0; iix < ns->len; ++iix) {
-        namespace_entry_t *entry = ns->items + iix;
+        name_t *entry = ns->items + iix;
         if (slice_eq(entry->name, name)) {
             entry->type = type;
+            entry->declaration = decl;
             return;
         }
     }
     printf("parser_add_name(" SL ", " SL " " SL ")\n", SLARG(name), SLARG(type_kind_name(type)), SLARG(type_to_string(type)));
-    dynarr_append(ns, ((namespace_entry_t) { .name = name, .type = type }));
+    dynarr_append_s(name_t, ns, .name = name, .type = type, .declaration = decl);
     parser_names_dump(parser);
 }

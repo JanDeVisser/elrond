@@ -36,6 +36,7 @@ typedef struct _value {
 
 OPTDEF(value_t);
 
+value_t     make_value_void();
 value_t     make_value_from_string(slice_t str);
 opt_value_t make_value_from_signed(nodeptr type, int64_t v);
 opt_value_t make_value_from_unsigned(nodeptr type, uint64_t v);

@@ -97,7 +97,7 @@ void Embed_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->identifier));
+    fprintf(f, SL "\n", SLARG(n->identifier.id));
 }
 
 void ExpressionList_print(FILE *f, nodes_t tree, node_t *n, int indent)
@@ -106,8 +106,8 @@ void ExpressionList_print(FILE *f, nodes_t tree, node_t *n, int indent)
     char buf[32];
     for (size_t ix = 0; ix < n->expression_list.len; ++ix) {
         snprintf(buf, 31, "Param %zu", ix);
-	node_print(f, buf, tree, n->expression_list.items[ix], indent + 4);
-    }        
+        node_print(f, buf, tree, n->expression_list.items[ix], indent + 4);
+    }
 }
 
 void Enum_print(FILE *f, nodes_t tree, node_t *n, int indent)
@@ -135,7 +135,7 @@ void ForeignFunction_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->identifier));
+    fprintf(f, SL "\n", SLARG(n->identifier.id));
 }
 
 void Function_print(FILE *f, nodes_t tree, node_t *n, int indent)
@@ -149,15 +149,14 @@ void Identifier_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->identifier));
+    fprintf(f, SL "\n", SLARG(n->identifier.id));
 }
 
 void Module_print(FILE *f, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, "\n");
-    for (size_t ix = 0; ix < n->statement_block.statements.len; ++ix) {
-        node_print(f, NULL, tree, n->statement_block.statements.items[ix],
-            indent + 4);
+    fprintf(f, SL "\n", SLARG(n->module.name));
+    for (size_t ix = 0; ix < n->module.statements.len; ++ix) {
+        node_print(f, NULL, tree, n->module.statements.items[ix], indent + 4);
     }
 }
 
@@ -173,6 +172,20 @@ void Parameter_print(FILE *f, nodes_t tree, node_t *n, int indent)
     (void) indent;
     fprintf(f, SL ": " SL, SLARG(n->variable_declaration.name), SLARG(typespec_to_string(tree, n->variable_declaration.type)));
     fprintf(f, "\n");
+}
+
+void Program_print(FILE *f, nodes_t tree, node_t *n, int indent)
+{
+    (void) tree;
+    (void) indent;
+    fprintf(f, SL "\n", SLARG(n->program.name));
+    for (size_t ix = 0; ix < n->program.modules.len; ++ix) {
+        fprintf(f, "\n");
+        node_print(f, NULL, tree, n->program.modules.items[ix], 0);
+    }
+    for (size_t ix = 0; ix < n->program.statements.len; ++ix) {
+        node_print(f, NULL, tree, n->program.statements.items[ix], indent + 4);
+    }
 }
 
 void Return_print(FILE *f, nodes_t tree, node_t *n, int indent)
@@ -223,6 +236,7 @@ void String_print(FILE *f, nodes_t tree, node_t *n, int indent)
     S(Module)             \
     S(Number)             \
     S(Parameter)          \
+    S(Program)            \
     S(Return)             \
     S(Function)           \
     S(Identifier)         \

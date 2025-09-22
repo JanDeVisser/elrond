@@ -200,4 +200,15 @@ void     type_registry_init();
             (__k == TYPK_IntType || __k == TYPK_FloatType); \
         })
 
+#define type_value_type(type)                              \
+    (                                                      \
+        {                                                  \
+            nodeptr __v = (type);                          \
+            assert(__v.ok);                                \
+            while (type_kind(__v) == TYPK_ReferenceType) { \
+                __v = get_type(__v)->referencing;          \
+            }                                              \
+            __v;                                           \
+        });
+
 #endif /* __TYPE_H__ */

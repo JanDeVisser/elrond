@@ -60,6 +60,22 @@ OPTDEF(nodeptrs);
         }                                                                \
     } while (0)
 
+#define dynarr_copy(A, T, arr)                                        \
+    (                                                                 \
+        {                                                             \
+            A __copy = {                                              \
+                .items = calloc((arr).capacity, sizeof(T)),           \
+                .len = (arr).len,                                     \
+                .capacity = (arr).capacity,                           \
+            };                                                        \
+            if (__copy.items == NULL) {                               \
+                fprintf(stderr, "Out of memory.\n");                  \
+                abort();                                              \
+            }                                                         \
+            memcpy(__copy.items, (arr).items, sizeof(T) * (arr).len); \
+            __copy;                                                   \
+        })
+
 #define dynarr_clear(arr) \
     do {                  \
         (arr)->len = 0;   \
@@ -76,6 +92,12 @@ OPTDEF(nodeptrs);
         dynarr_ensure((arr), (arr)->len + 1); \
         (arr)->items[(arr)->len++] = (elem);  \
         ((arr)->len - 1);                     \
+    } while (0);
+
+#define dynarr_append_s(T, arr, ...) \
+    do {                             \
+        T __elem = { __VA_ARGS__ };  \
+        dynarr_append(arr, __elem);  \
     } while (0);
 
 #define dynarr_pop(arr)       \

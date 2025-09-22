@@ -9,6 +9,7 @@ Nob_Cmd cmd = { 0 };
 
 #define APP_SOURCES(S) \
     S(elrond)          \
+    S(generate)        \
     S(parser)          \
     S(operators)       \
     S(node)            \

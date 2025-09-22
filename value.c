@@ -15,6 +15,13 @@ static opt_long   value_as_signed(value_t val);
 static opt_ulong  value_as_unsigned(value_t val);
 static opt_double value_as_double(value_t val);
 
+value_t make_value_void()
+{
+    return (value_t) {
+        .type = Null,
+    };
+}
+
 value_t make_value_from_string(slice_t str)
 {
     return (value_t) { .type = String, .slice = str };

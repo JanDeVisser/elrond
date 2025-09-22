@@ -25,7 +25,6 @@ slice_t typespec_to_string(nodes_t tree, nodeptr typespec)
     case TYPN_Alias:
         return node->type_specification.alias_descr.name;
     default:
-	return C("");
-    }        
-}    
-
+        return C("");
+    }
+}

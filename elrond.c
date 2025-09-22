@@ -17,6 +17,7 @@
 #include "io.h"
 #include "slice.h"
 
+#include "ir.h"
 #include "operators.h"
 #include "parser.h"
 #include "type.h"
@@ -49,7 +50,7 @@ void report(char const *hdr, parser_t *parser)
     }
     parser_print(parser);
     ++stage;
-}    
+}
 
 int main(int argc, char const **argv)
 {
@@ -65,9 +66,13 @@ int main(int argc, char const **argv)
     report("Parsing", &parser);
     parser_normalize(&parser);
     report("Normalizing", &parser);
-    do {    
-	parser_bind(&parser);
+    do {
+        parser_bind(&parser);
     } while (!parser_bound_type(&parser, parser.root).ok && parser.bound != 0);
     report("Binding", &parser);
+
+    ir_generator_t gen = generate_ir(&parser, parser.root);
+    list(stdout, &gen, nodeptr_ptr(0));
+
     return 0;
 }

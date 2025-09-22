@@ -22,17 +22,6 @@
             __v;                                 \
         });
 
-#define node_value_type(node)                              \
-    (                                                      \
-        {                                                  \
-            nodeptr __v = N((node))->bound_type;           \
-            assert(__v.ok);                                \
-            while (type_kind(__v) == TYPK_ReferenceType) { \
-                __v = get_type(lhs_type)->referencing;     \
-            }                                              \
-            __v;                                           \
-        });
-
 typedef enum _operand_kind {
     OPK_Type,
     OPK_Pseudo,
@@ -198,7 +187,7 @@ nodeptr BinaryExpression_bind(parser_t *parser, nodeptr n)
                 location,
                 "Right hand side of member access operator must be identifier");
         } else {
-            slice_t id = N(node->binary_expression.rhs)->identifier;
+            slice_t id = N(node->binary_expression.rhs)->identifier.id;
             nodeptr s = ref->referencing;
             assert(type_kind(s) == TYPK_StructType);
             type_t *strukt = get_type(s);
@@ -295,7 +284,7 @@ nodeptr Call_bind(parser_t *parser, nodeptr n)
             parser,
             node->location,
             "`" SL "` not callable",
-	    SLARG(N(node->function_call.callable)->identifier)); // FIXME error message
+            SLARG(N(node->function_call.callable)->identifier.id)); // FIXME error message
     }
     type_t *args = get_type(bind(parser, node->function_call.arguments));
     assert(args->kind == TYPK_TypeList);
@@ -307,7 +296,7 @@ nodeptr Call_bind(parser_t *parser, nodeptr n)
                 node->location,
                 "Type mismatch for parameter `" SL "` of function `" SL "`",
                 SLARG(N(node->function_call.arguments)->variable_declaration.name),
-                SLARG(N(node->function_call.callable)->identifier)); // FIXME error message
+                SLARG(N(node->function_call.callable)->identifier.id)); // FIXME error message
         }
     }
     if (ix > sig->signature_type.parameters.len) {
@@ -315,7 +304,7 @@ nodeptr Call_bind(parser_t *parser, nodeptr n)
             parser,
             node->location,
             "Too many parameters for function `" SL "`",
-	    SLARG(N(node->function_call.callable)->identifier)); // FIXME error message
+            SLARG(N(node->function_call.callable)->identifier.id)); // FIXME error message
     } else if (ix > args->type_list_types.len) {
         node_t *param = N(sig->signature_type.parameters.items[ix]);
         return parser_bind_error(
@@ -323,7 +312,14 @@ nodeptr Call_bind(parser_t *parser, nodeptr n)
             node->location,
             "Missing parameter `" SL "` for function `" SL "`",
             SLARG(param->variable_declaration.name),
-	    SLARG(N(node->function_call.callable)->identifier)); // FIXME error message
+            SLARG(N(node->function_call.callable)->identifier.id)); // FIXME error message
+    }
+    node_t *callable = N(node->function_call.callable);
+    if (callable->node_type == NT_Identifier) {
+        node->function_call.declaration = callable->identifier.declaration;
+    } else {
+        fprintf(stderr, "TODO: callable with node type `%s` in NT_Call node\n", node_type_name(callable->node_type));
+        abort();
     }
     return sig->signature_type.result;
 }
@@ -352,7 +348,7 @@ nodeptr Function_bind(parser_t *parser, nodeptr n)
     node_t *node = N(n);
     nodeptr sig = bind(parser, node->function.signature);
     if (!node->namespace.ok) {
-        parser_add_name(parser, node->function.name, sig);
+        parser_add_name(parser, node->function.name, sig, n);
         node->namespace.ok = true;
         dynarr_append(&parser->namespaces, n);
     }
@@ -374,18 +370,33 @@ nodeptr Function_bind(parser_t *parser, nodeptr n)
 
 nodeptr Identifier_bind(parser_t *parser, nodeptr n)
 {
-    return parser_resolve(parser, N(n)->identifier);
+    opt_name_t name = parser_resolve(parser, N(n)->identifier.id);
+    if (name.ok) {
+        N(n)->identifier.declaration = name.value.declaration;
+        return name.value.type;
+    }
+    return nullptr;
 }
 
 nodeptr Module_bind(parser_t *parser, nodeptr n)
 {
-    return bind_block(parser, n, offsetof(node_t, statement_block.statements));
+    // TODO Module type should be type of last non-function stmt
+    return bind_block(parser, n, offsetof(node_t, module.statements));
 }
 
 nodeptr Parameter_bind(parser_t *parser, nodeptr n)
 {
     bind(parser, N(n)->variable_declaration.type);
     return N(N(n)->variable_declaration.type)->bound_type;
+}
+
+nodeptr Program_bind(parser_t *parser, nodeptr n)
+{
+    node_t *node = N(n);
+    for (size_t ix = 0; ix < node->program.modules.len; ++ix) {
+        bind(parser, node->program.modules.items[ix]);
+    }
+    return bind_block(parser, n, offsetof(node_t, program.statements));
 }
 
 nodeptr Return_bind(parser_t *parser, nodeptr n)
@@ -425,6 +436,7 @@ nodeptr TypeSpecification_bind(parser_t *parser, nodeptr n)
     S(Identifier)        \
     S(Module)            \
     S(Parameter)         \
+    S(Program)           \
     S(Return)            \
     S(Signature)         \
     S(StatementBlock)    \
