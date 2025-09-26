@@ -7,6 +7,7 @@
 #ifndef __DA_H__
 #define __DA_H__
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -33,6 +34,8 @@ typedef struct _generic_da {
 typedef DA(char) sb_t;
 OPTDEF(sb_t);
 typedef DA(sb_t) strings_t;
+typedef DA(slice_t) slices_t;
+typedef DA(uint64_t) uint64s;
 typedef DA(nodeptr) nodeptrs;
 OPTDEF(nodeptrs);
 
@@ -107,6 +110,16 @@ OPTDEF(nodeptrs);
         }                     \
     } while (0)
 
+#define dynarr_back(arr)                                                         \
+    (                                                                            \
+        {                                                                        \
+            if ((arr)->len == 0) {                                               \
+                fprintf(stderr, "dynarr_back(): Out of bounds array access.\n"); \
+                abort();                                                         \
+            }                                                                    \
+            (arr)->items + ((arr)->len - 1);                                     \
+        })
+
 #define dynarr_cmp(arr1, arr2)                                                            \
     (                                                                                     \
         {                                                                                 \
@@ -133,14 +146,21 @@ OPTDEF(nodeptrs);
     } while (0);
 #define sb_append_sb(sb, a) sb_append((sb), (sb_as_slice((a))))
 #define sb_append_cstr(sb, a) sb_append((sb), C(a));
+#define sb_make(s)                \
+    (                             \
+        {                         \
+            sb_t __s = { 0 };     \
+            sb_append(&__s, (s)); \
+            (__s);                \
+        })
 
 int   generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size);
 sb_t *sb_append(sb_t *sb, slice_t slice);
 sb_t *sb_unescape(sb_t *sb, slice_t escaped);
 sb_t *sb_escape(sb_t *sb, slice_t slice);
-sb_t  sb_format(char const *fmt, ...);
+sb_t  sb_format(char const *fmt, ...) __attribute__((__format__(printf, 1, 2)));
 sb_t  sb_vformat(char const *fmt, va_list args);
-sb_t *sb_printf(sb_t *sb, char const *fmt, ...);
+sb_t *sb_printf(sb_t *sb, char const *fmt, ...) __attribute__((__format__(printf, 2, 3)));
 sb_t *sb_vprintf(sb_t *sb, char const *fmt, va_list args);
 
 #endif /* __DA_H__ */
