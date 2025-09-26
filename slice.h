@@ -157,6 +157,15 @@ typedef struct array {
 #define SL "%.*s"
 #define SLARG(s) (int) (s).len, (s).items
 
+#define slice_fwrite(s, f)                    \
+    do {                                      \
+        slice_t __s = (s);                    \
+        if (__s.len > 0) {                    \
+            fwrite(__s.items, 1, __s.len, f); \
+            fputc('\n', f);                   \
+        }                                     \
+    } while (0)
+
 slice_t    slice_head(slice_t slice, size_t from_back);
 slice_t    slice_first(slice_t slice, size_t num);
 slice_t    slice_tail(slice_t slice, size_t from_start);
@@ -173,6 +182,9 @@ opt_size_t slice_last_indexof(slice_t haystack, char needle);
 opt_size_t slice_first_of(slice_t haystack, slice_t needles);
 int        slice_cmp(slice_t s1, slice_t s2);
 bool       slice_eq(slice_t s1, slice_t s2);
+slice_t    slice_trim(slice_t s);
+slice_t    slice_rtrim(slice_t s);
+slice_t    slice_ltrim(slice_t s);
 opt_ulong  slice_to_ulong(slice_t s, unsigned int base);
 opt_long   slice_to_long(slice_t s, unsigned int base);
 
@@ -323,6 +335,35 @@ bool slice_eq(slice_t s1, slice_t s2)
     return slice_cmp(s1, s2) == 0;
 }
 
+slice_t slice_trim(slice_t s)
+{
+    return slice_rtrim(slice_ltrim(s));
+}
+
+slice_t slice_ltrim(slice_t s)
+{
+    char *ptr = s.items;
+    while (isspace(*ptr) && ptr < s.items + s.len) {
+        ++ptr;
+    }
+    if (ptr == s.items + s.len) {
+        return (slice_t) { 0 };
+    }
+    return slice_make(ptr, s.len - (ptr - s.items));
+}
+
+slice_t slice_rtrim(slice_t s)
+{
+    size_t l = s.len;
+    while (l > 0 && isspace(s.items[l - 1])) {
+        --l;
+    }
+    if (l == 0) {
+        return (slice_t) { 0 };
+    }
+    return slice_make(s.items, l);
+}
+
 opt_int digit_for_base(unsigned int digit, unsigned int base)
 {
     if (digit >= '0' && digit < '0' + base) {
@@ -446,6 +487,14 @@ int main()
     assert(slice_endswith(s, C("lo")));
     assert(!slice_startswith(s, C("he")));
     assert(!slice_endswith(s, C("la")));
+    slice_t spaces = C("   Hello   ");
+    assert(slice_eq(slice_ltrim(spaces), C("Hello   ")));
+    assert(slice_eq(slice_rtrim(spaces), C("   Hello")));
+    assert(slice_eq(slice_trim(spaces), s));
+    slice_t tabs = C(" \t Hello \t ");
+    assert(slice_eq(slice_ltrim(tabs), C("Hello \t ")));
+    assert(slice_eq(slice_rtrim(tabs), C(" \t Hello")));
+    assert(slice_eq(slice_trim(tabs), s));
 }
 
 #endif /* SLICE_TEST */
