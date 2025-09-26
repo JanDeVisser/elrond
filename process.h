@@ -87,14 +87,25 @@ int              process_write(process_t *proc, slice_t sv);
 
 #define process_set_arguments(p, ...) \
     _process_set_arguments((p), ##__VA_ARGS__, NULL)
-#define cmd_execute(cmd, ...)                                \
-    (                                                        \
-        {                                                    \
-            process_t __p = {                                \
-                .command = cmd,                              \
-            };                                               \
-            _process_set_arguments(&__p##__VA_ARGS__, NULL); \
-            (process_execute(&p));                           \
+
+#define process_create(cmd, ...)                               \
+    (                                                          \
+        {                                                      \
+            process_t __p = {                                  \
+                .command = C(cmd),                             \
+            };                                                 \
+            _process_set_arguments(&__p, ##__VA_ARGS__, NULL); \
+            (__p);                                             \
+        })
+
+#define cmd_execute(cmd, ...)                                  \
+    (                                                          \
+        {                                                      \
+            process_t __p = {                                  \
+                .command = cmd,                                \
+            };                                                 \
+            _process_set_arguments(&__p, ##__VA_ARGS__, NULL); \
+            (process_execute(&p));                             \
         })
 
 #define process_background(p) process_start(p)

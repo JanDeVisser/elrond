@@ -116,7 +116,7 @@ slice_t AliasType_to_string(type_t *t)
     for (t = get_type(t->alias_of); t->kind == TYPK_AliasType; t = get_type(t->alias_of)) {
         aliasof = t->alias_of;
     }
-    return sb_as_slice(sb_format("aliasof(" SL ")", type_to_string(aliasof)));
+    return sb_as_slice(sb_format("aliasof(" SL ")", SLARG(type_to_string(aliasof))));
 }
 
 intptr_t AliasType_size_of(type_t *t)

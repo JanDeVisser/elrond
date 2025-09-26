@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <string.h>
 #ifdef CMDLINE_TEST
 #define SLICE_IMPLEMENTATION
 #define DA_IMPLEMENTATION
@@ -84,8 +83,6 @@ slice_t cmdline_value(char *opt);
 bool    cmdline_is_set(char *opt);
 
 #endif /* __CMDLINE_H__ */
-
-#define CMDLINE_IMPLEMENTATION
 
 #ifdef CMDLINE_IMPLEMENTATION
 #ifndef CMDLINE_IMPLEMENTED

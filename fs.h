@@ -33,6 +33,7 @@ path_t  path_parse(slice_t p);
 path_t  path_extend(path_t p, slice_t sub);
 slice_t path_extension(path_t *path);
 path_t *path_replace_extension(path_t *path, slice_t ext);
+path_t *path_strip_extension(path_t *path);
 void    path_free(path_t *path);
 
 #define path_make_relative(...) path_initialize(PATH_RELATIVE, ##__VA_ARGS__, NULL);
@@ -150,6 +151,21 @@ path_t *path_replace_extension(path_t *path, slice_t ext)
         sb_append_char(&path->path, '.');
     }
     sb_append(&path->path, ext);
+    path_reparse(path);
+    return path;
+}
+
+path_t *path_strip_extension(path_t *path)
+{
+    if (path->components.len == 0) {
+        return path;
+    }
+    slice_t last = *dynarr_back(&path->components);
+    assert(last.len > 0);
+    opt_size_t dot = slice_last_indexof(last, '.');
+    if (dot.ok) {
+        path->path.len = (last.items - path->path.items) + dot.value;
+    }
     path_reparse(path);
     return path;
 }

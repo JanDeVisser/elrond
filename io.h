@@ -7,6 +7,12 @@
 #ifndef __IO_H__
 #define __IO_H__
 
+#ifdef IO_TEST
+#define IO_IMPLEMENTATION
+#define SLICE_IMPLEMENTATION
+#define DA_IMPLEMENTATION
+#endif
+
 #include "da.h"
 
 extern opt_sb_t slurp_file(slice_t path);
@@ -14,6 +20,7 @@ extern opt_sb_t slurp_file(slice_t path);
 #endif /* __IO_H__ */
 
 #ifdef IO_IMPLEMENTATION
+#ifndef IO_IMPLEMENTED
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -59,4 +66,16 @@ done:
     return ret;
 }
 
-#endif
+#endif /* IO_IMPLEMENTED */
+#endif /* IO_IMPLEMENTATION */
+
+#ifdef IO_TEST
+
+int main()
+{
+    opt_sb_t contents = slurp_file(C("io.h"));
+    assert(contents.ok);
+    return 0;
+}    
+
+#endif /* IO_TEST */

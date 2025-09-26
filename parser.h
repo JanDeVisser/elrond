@@ -21,7 +21,7 @@ typedef struct _parser {
     int       bound;
 } parser_t;
 
-parser_t        parse(slice_t text);
+parser_t        parse(slice_t name, slice_t text);
 void            parser_print(parser_t *parser);
 nodeptr         parser_normalize(parser_t *parser);
 nodeptr         parser_bind(parser_t *parser);

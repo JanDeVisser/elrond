@@ -1170,7 +1170,7 @@ nodeptr parse_yield_statement(parser_t *this)
         .yield_statement = { .label = label, .statement = stmt });
 }
 
-parser_t parse(slice_t text)
+parser_t parse(slice_t name, slice_t text)
 {
     parser_t parser = { 0 };
     lexer_push_source(&parser.lexer, text, c_scanner);
@@ -1180,12 +1180,12 @@ parser_t parse(slice_t text)
         &parser,
         NT_Program,
         t.location,
-        .program = { .name = C("anon"), .statements = { 0 } });
+        .program = { .name = name, .statements = { 0 } });
     nodeptr mod = parser_add_node(
         &parser,
         NT_Module,
         t.location,
-        .module = { .name = C("anon"), .statements = block });
+        .module = { .name = name, .statements = block });
     dynarr_append(&parser_node(&parser, parser.root)->program.modules, mod);
     return parser;
 }
