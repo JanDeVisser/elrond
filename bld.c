@@ -7,6 +7,14 @@ Nob_Cmd cmd = { 0 };
 
 #define BUILD_DIR "build/"
 
+#define STB_HEADERS(S)  \
+    S(slice, SLICE)     \
+    S(da, DA)           \
+    S(lexer, LEXER)     \
+    S(cmdline, CMDLINE) \
+    S(fs, FS)           \
+    S(process, PROCESS)
+
 #define APP_SOURCES(S) \
     S(elrond)          \
     S(generate)        \
@@ -27,32 +35,17 @@ int main(int argc, char **argv)
     if (cc == NULL) {
         cc = "cc";
     }
-    cmd_append(&cmd, cc, "-DSLICE_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR "slice", "slice.h");
-    if (!cmd_run(&cmd)) {
-        return 1;
+#undef S
+#define S(H, T)                                                                                              \
+    cmd_append(&cmd, cc, "-D" #T "_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR #H, #H ".h"); \
+    if (!cmd_run(&cmd)) {                                                                                    \
+        return 1;                                                                                            \
+    }                                                                                                        \
+    cmd_append(&cmd, BUILD_DIR #H);                                                                          \
+    if (!cmd_run(&cmd)) {                                                                                    \
+        return 1;                                                                                            \
     }
-    cmd_append(&cmd, BUILD_DIR "slice");
-    if (!cmd_run(&cmd)) {
-        return 1;
-    }
-
-    cmd_append(&cmd, cc, "-DDA_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR "da", "da.h");
-    if (!cmd_run(&cmd)) {
-        return 1;
-    }
-    cmd_append(&cmd, BUILD_DIR "da");
-    if (!cmd_run(&cmd)) {
-        return 1;
-    }
-
-    cmd_append(&cmd, cc, "-DLEXER_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR "lexer", "lexer.h");
-    if (!cmd_run(&cmd)) {
-        return 1;
-    }
-    cmd_append(&cmd, BUILD_DIR "lexer");
-    if (!cmd_run(&cmd)) {
-        return 1;
-    }
+    STB_HEADERS(S)
 
 #undef S
 #define S(SRC)                                                                                  \
