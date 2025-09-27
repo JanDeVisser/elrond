@@ -73,7 +73,7 @@ done:
 
 int main()
 {
-    opt_sb_t contents = slurp_file(C("io.h"));
+    opt_sb_t contents = slurp_file(C("src/io.h"));
     assert(contents.ok);
     return 0;
 }

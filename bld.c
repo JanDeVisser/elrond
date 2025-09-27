@@ -7,6 +7,7 @@
 Nob_Cmd cmd = { 0 };
 
 #define BUILD_DIR "build/"
+#define SRC_DIR "src/"
 #define RT_DIR "rt/arch/Darwin/arm64/"
 
 #define STB_HEADERS(S)  \
@@ -65,7 +66,7 @@ int main(int argc, char **argv)
 #undef S
 #define S(H, T)                                                                                                  \
     if (headers_updated || nob_needs_rebuild1(BUILD_DIR #H, #H ".h")) {                                          \
-        cmd_append(&cmd, cc, "-D" #T "_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR #H, #H ".h"); \
+        cmd_append(&cmd, cc, "-D" #T "_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR #H, SRC_DIR #H ".h"); \
         if (!cmd_run(&cmd)) {                                                                                    \
             return 1;                                                                                            \
         }                                                                                                        \
@@ -80,16 +81,16 @@ int main(int argc, char **argv)
     char const *sources[] = {
         "",
 #undef S
-#define S(H) #H ".h",
+#define S(H) SRC_DIR #H ".h",
         APP_HEADERS(S)
     };
 
     bool sources_updated = false;
 #undef S
 #define S(SRC)                                                                                      \
-    sources[0] = #SRC ".c";                                                                         \
+    sources[0] = SRC_DIR #SRC ".c";                                                                         \
     if (headers_updated || nob_needs_rebuild(BUILD_DIR #SRC ".o", sources, 9)) {                    \
-        cmd_append(&cmd, cc, "-Wall", "-Wextra", "-c", "-g", "-o", BUILD_DIR #SRC ".o", #SRC ".c"); \
+        cmd_append(&cmd, cc, "-Wall", "-Wextra", "-c", "-g", "-o", BUILD_DIR #SRC ".o", SRC_DIR #SRC ".c"); \
         if (!cmd_run(&cmd)) {                                                                       \
             return 1;                                                                               \
         }                                                                                           \
