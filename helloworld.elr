@@ -1,7 +1,8 @@
-func print(s: string) void -> "_elr_print"
+func putln(s: string) void -> "elrond$putln"
+func puts(s: string) void -> "elrond$puts"
 
 func main() i32
 {
-	print("Hello, World!\n")
+	puts("Hello, World!\n")
 	return 0::i32
 }

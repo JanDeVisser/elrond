@@ -33,7 +33,6 @@
 
 typedef void (*generate_fnc)(ir_generator_t *, nodeptr n);
 
-static void operation_list(FILE *f, operation_t const *op);
 static void function_list(FILE *f, ir_generator_t *gen, nodeptr ir);
 static void module_list(FILE *f, ir_generator_t *gen, nodeptr ir);
 static void program_list(FILE *f, ir_generator_t *gen, nodeptr ir);
@@ -83,7 +82,7 @@ void operation_list(FILE *f, operation_t const *op)
     fprintf(f, "%*s", 15 - (int) type_name.len, "");
     switch (op->type) {
     case IRO_Break:
-        fprintf(f, "%llu", op->Break.scope_end);
+        fprintf(f, "scope_end %llu depth %llu label %llu exit_type %zu", op->Break.scope_end, op->Break.depth, op->Break.label, op->Break.exit_type.value);
         break;
     case IRO_PushConstant:
         value_print(f, op->PushConstant);
@@ -315,8 +314,9 @@ void generate_Call(ir_generator_t *gen, nodeptr n)
             generator_add_op(gen, Dereference, value_type);
         }
     }
-    if (decl->node_type == NT_ForeignFunction) {
-        generator_add_op(gen, NativeCall, { .name = node->identifier.id, .parameters = params, .return_type = node->bound_type });
+    node_t *impl = GN(decl->function.implementation);
+    if (impl->node_type == NT_ForeignFunction) {
+        generator_add_op(gen, NativeCall, { .name = impl->identifier.id, .parameters = params, .return_type = node->bound_type });
         return;
     }
     generator_add_op(gen, Call, { .name = decl->function.name, .parameters = params, .return_type = node->bound_type });
@@ -550,22 +550,18 @@ void generate_StatementBlock(ir_generator_t *gen, nodeptr n)
         empty &= !discard.ok;
         generate(gen, stmt);
     }
-    operation_t *last = last_op(gen);
-    if (last->type == IRO_Break) {
-        generator_add_op(gen, Pop, node->bound_type);
-    }
     if (empty) {
         generator_add_op(gen, PushConstant, make_value_void());
     }
     generator_add_op(gen, Label, scope_end);
     block_descriptor_t *bd = &gen->ctxs.items[gen->ctxs.len - 1].block;
-    for (size_t ix = 0; ix < bd->defer_stmts.len; ++ix) {
-        ir_defer_statement_t ds = bd->defer_stmts.items[ix];
-        has_defered = true;
-        generator_add_op(gen, Label, ds.label);
-        generate(gen, ds.statement);
-        generator_add_op(gen, Discard, GN(ds.statement)->bound_type);
-    }
+    //    for (size_t ix = 0; ix < bd->defer_stmts.len; ++ix) {
+    //        ir_defer_statement_t ds = bd->defer_stmts.items[ix];
+    //        has_defered = true;
+    //        generator_add_op(gen, Label, ds.label);
+    //        generate(gen, ds.statement);
+    //        generator_add_op(gen, Discard, GN(ds.statement)->bound_type);
+    //    }
     dynarr_pop(&gen->ctxs);
 
     uint64_t enclosing_end = 0;

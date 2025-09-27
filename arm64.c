@@ -31,9 +31,9 @@ void arm64_add_line(arm64_function_t *f, slice_t line)
         sb_append_char(f->sections + f->active, '\n');
         return;
     }
-    if ((line.items[0] == '.') || slice_endswith(line, C(":"))) {
+    if ((line.items[0] == '.') || line.items[line.len - 1] == ':') {
         sb_append(f->sections + f->active, line);
-        sb_append_char(f->sections + f->active, '\n');
+        sb_append_cstr(f->sections + f->active, " ; label \n");
         return;
     }
 
@@ -60,6 +60,7 @@ void arm64_add_instruction(arm64_function_t *f, slice_t mnemonic, char const *pa
     sb_append(f->sections + f->active, mnemonic);
     sb_append_char(f->sections + f->active, '\t');
     sb_vprintf(f->sections + f->active, param_fmt, args);
+    sb_append_char(f->sections + f->active, '\n');
     va_end(args);
 }
 
@@ -106,12 +107,12 @@ void arm64_add_text(arm64_function_t *f, char const *fmt, ...)
 
 void arm64_add_label(arm64_function_t *f, slice_t label)
 {
-    arm64_add_text(f, "\n" SL ":\n", SLARG(label));
+    arm64_add_text(f, "\n" SL ":", SLARG(label));
 }
 
 void arm64_add_directive_f(arm64_function_t *f, slice_t directive, slice_t args)
 {
-    arm64_add_text(f, SL "\t" SL "\n", SLARG(directive), SLARG(args));
+    arm64_add_text(f, SL "\t" SL, SLARG(directive), SLARG(args));
 }
 
 void arm64_add_comment(arm64_function_t *f, slice_t comment)
@@ -236,11 +237,8 @@ int move_into_stack(arm64_function_t *f, size_t size, int from_reg, uint64_t to_
 
 void arm64_skeleton(arm64_function_t *f, ir_generator_t *gen)
 {
-    static sb_t buffer = { 0 };
     f->active = CS_Prolog;
-    arm64_add_label(f, f->name);
-    arm64_add_label(f, sb_as_slice(*sb_printf(&buffer, "_" SL, SLARG(f->name))));
-    sb_clear(&buffer);
+    sb_printf(f->sections + CS_Prolog, SL ":\n_" SL ":\n", SLARG(f->name), SLARG(f->name));
     arm64_add_instruction_param(f, C("stp"), C("fp,lr,[sp,#-16]!"));
     arm64_add_instruction_param(f, C("mov"), C("fp,sp"));
     if (f->stack_depth > 0) {
@@ -526,8 +524,8 @@ void generate_Break(arm64_function_t *f, operation_t *op)
 {
     if (op->Break.label != op->Break.scope_end) {
         f->save_regs |= 3 << 19; // reg 19 and 20
-        arm64_add_instruction(f, C("mov"), "x19,%llu", op->Break.depth);
-        arm64_add_instruction(f, C("adr"), "x20,lbl_%llu", op->Break.label);
+                                 //        arm64_add_instruction(f, C("mov"), "x19,%llu", op->Break.depth);
+                                 //        arm64_add_instruction(f, C("adr"), "x20,lbl_%llu", op->Break.label);
         arm64_add_instruction(f, C("b"), "lbl_%llu", op->Break.scope_end);
     }
 }
@@ -609,7 +607,7 @@ void generate_JumpT(arm64_function_t *f, operation_t *op)
 
 void generate_Label(arm64_function_t *f, operation_t *op)
 {
-    sb_printf(f->sections + f->active, "lbl_%llu", op->Label);
+    sb_printf(f->sections + f->active, "lbl_%llu:\n", op->Label);
 }
 
 void generate_NativeCall(arm64_function_t *f, operation_t *op)
@@ -704,9 +702,10 @@ void generate_PushVarAddress(arm64_function_t *f, operation_t *op)
 void generate_ScopeBegin(arm64_function_t *f, operation_t *op)
 {
     (void) op;
-    f->save_regs |= 3 << 19;
-    arm64_add_instruction(f, C("mov"), "x19,xzr");
-    arm64_add_instruction(f, C("mov"), "x20,xzr");
+    (void) f;
+    //    f->save_regs |= 3 << 19;
+    //    arm64_add_instruction(f, C("mov"), "x19,xzr");
+    //    arm64_add_instruction(f, C("mov"), "x20,xzr");
 }
 
 void generate_ScopeEnd(arm64_function_t *f, operation_t *op)
@@ -743,6 +742,8 @@ void arm64_function_generate(arm64_function_t *f, ir_generator_t *gen, operation
 
     for (size_t ix = 0; ix < operations->len; ++ix) {
         operation_t *op = operations->items + ix;
+        printf("Serializing op #%zu   ", ix);
+        operation_list(stdout, op);
         switch (op->type) {
 #undef S
 #define S(T, P)              \
@@ -800,7 +801,7 @@ void arm64_add_directive_o(arm64_object_t *o, slice_t directive, slice_t args)
 {
     sb_printf(o->sections + CS_Prolog, SL "\t" SL "\n", SLARG(directive), SLARG(args));
     if (slice_eq(directive, C(".global"))) {
-        sb_printf(o->sections + CS_Prolog, ".global\t_" SL, SLARG(args));
+        sb_printf(o->sections + CS_Prolog, ".global\t_" SL "\n", SLARG(args));
         o->has_exports = true;
         if (slice_eq(args, C("main"))) {
             o->has_main = true;
@@ -866,8 +867,8 @@ void arm64_object_write(arm64_object_t *o, FILE *f)
 
 bool arm64_save_and_assemble(arm64_object_t *o, ir_generator_t *gen)
 {
-    path_t dot_arwen = path_make_relative(".arwen");
-    path_t path = path_extend(dot_arwen, o->file_name);
+    path_t dot_elrond = path_make_relative(".elrond");
+    path_t path = path_extend(dot_elrond, o->file_name);
     path_replace_extension(&path, C("s"));
     FILE *f = fopen(path.path.items, "wb+");
     if (f == NULL) {
@@ -877,7 +878,7 @@ bool arm64_save_and_assemble(arm64_object_t *o, ir_generator_t *gen)
     fclose(f);
 
     if (cmdline_is_set("dump-ir")) {
-        path_t ir_path = path_extend(dot_arwen, o->file_name);
+        path_t ir_path = path_extend(dot_elrond, o->file_name);
         path_replace_extension(&ir_path, C("ir"));
         FILE *f = fopen(ir_path.path.items, "wb+");
         if (f == NULL) {
@@ -905,16 +906,16 @@ bool arm64_save_and_assemble(arm64_object_t *o, ir_generator_t *gen)
         fprintf(stderr, "Assembler failed:\n" SL, SLARG(as.out_pipes.pipes[1].text));
         abort();
     }
-    if (!cmdline_is_set("keep-assembly")) {
-        unlink(path.path.items);
-    }
+    //    if (!cmdline_is_set("keep-assembly")) {
+    //        unlink(path.path.items);
+    //    }
     return true;
 }
 
 bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
 {
-    path_t dot_arwen = path_make_relative(".arwen");
-    mkdir(dot_arwen.path.items, 0777);
+    path_t dot_elrond = path_make_relative(".elrond");
+    mkdir(dot_elrond.path.items, 0777);
 
     ir_node_t *prog = gen->ir_nodes.items + exe->program.value;
 
@@ -930,14 +931,14 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
         dynarr_append(&exe->objects, obj);
     }
 
-    slices_t o_files;
+    slices_t o_files = { 0 };
     for (size_t ix = 0; ix < exe->objects.len; ++ix) {
         arm64_object_t *obj = exe->objects.items + ix;
         if (obj->has_exports) {
             if (!arm64_save_and_assemble(obj, gen)) {
                 return false;
             }
-            path_t path = path_extend(dot_arwen, obj->file_name);
+            path_t path = path_extend(dot_elrond, obj->file_name);
             path_replace_extension(&path, C("o"));
             ;
             dynarr_append(&o_files, sb_as_slice(path.path))
@@ -945,32 +946,35 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
     }
 
     if (o_files.len != 0) {
-        process_t        p = process_create("xcrun", "sdk", "macosx", "--show-sdk-path");
+        process_t        p = process_create("xcrun", "--sdk", "macosx", "--show-sdk-path");
         process_result_t res = process_execute(&p);
         if (!res.ok) {
             fprintf(stderr, "`xcrun` execution failed: %s\n", strerror(errno));
             abort();
         } else if (res.success != 0) {
-            fprintf(stderr, "`xcrun` execution returned %d\n", res.success);
+            fprintf(stderr, "xcrun failed:\n" SL, SLARG(p.out_pipes.pipes[1].text));
             abort();
         }
-        slice_t sdk_path = sb_as_slice(p.out_pipes.pipes[0].text);
-        path_t  program_path = path_parse(prog->program.name);
+        sb_t sdk_path = p.out_pipes.pipes[0].text;
+        sdk_path.len = slice_rtrim(sb_as_slice(sdk_path)).len;
+        sb_append_cstr(&sdk_path, "/usr/lib");
+        path_t program_path = path_parse(prog->program.name);
         path_strip_extension(&program_path);
         printf("[ARM64] Linking `" SL "`\n", SLARG(program_path.path));
         printf("[ARM64] SDK path: `" SL "`\n", SLARG(sdk_path));
 
-        sb_t      lib_dir = sb_format("-L" SL "/lib", SLARG(C("../build")));
+        // sb_t      lib_dir = sb_format("-Lbuild");
         process_t link = process_create(
             "ld",
             "-o",
             program_path.path.items,
-            lib_dir.items,
-            "-larwenstart",
-            "-larwenrt",
-            "-lSystem",
-            "-syslibroot",
+            "-L"
+            "build", // lib_dir.items,
+            "-L",
             sdk_path.items,
+            "-lelrstart",
+            "-lelrrt",
+            "-lSystem",
             "-e",
             "_start",
             "-arch",

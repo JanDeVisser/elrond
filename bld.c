@@ -1,3 +1,4 @@
+
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 
@@ -6,6 +7,7 @@
 Nob_Cmd cmd = { 0 };
 
 #define BUILD_DIR "build/"
+#define RT_DIR "rt/arch/Darwin/arm64/"
 
 #define STB_HEADERS(S)  \
     S(slice, SLICE)     \
@@ -41,12 +43,20 @@ Nob_Cmd cmd = { 0 };
     S(value)           \
     S(bind)
 
+#define RT_SOURCES(S) \
+    S(endln)          \
+    S(puthex)         \
+    S(puti)           \
+    S(putln)          \
+    S(puts)           \
+    S(strlen)
+
 int main(int argc, char **argv)
 {
     NOB_GO_REBUILD_URSELF(argc, argv);
     if (!nob_file_exists("build")) {
         mkdir_if_not_exists("build");
-    }        
+    }
     char *cc = getenv("CC");
     if (cc == NULL) {
         cc = "cc";
@@ -79,7 +89,7 @@ int main(int argc, char **argv)
 #define S(SRC)                                                                                      \
     sources[0] = #SRC ".c";                                                                         \
     if (headers_updated || nob_needs_rebuild(BUILD_DIR #SRC ".o", sources, 9)) {                    \
-        cmd_append(&cmd, cc, "-Wall", "-Wextra", "-g", "-c", "-o", BUILD_DIR #SRC ".o", #SRC ".c"); \
+        cmd_append(&cmd, cc, "-Wall", "-Wextra", "-c", "-g", "-o", BUILD_DIR #SRC ".o", #SRC ".c"); \
         if (!cmd_run(&cmd)) {                                                                       \
             return 1;                                                                               \
         }                                                                                           \
@@ -94,7 +104,57 @@ int main(int argc, char **argv)
         if (!cmd_run(&cmd)) {
             return 1;
         }
+    }
 
+    if (nob_needs_rebuild1(BUILD_DIR "libelrstart.a", RT_DIR "start.s")) {
+        cmd_append(&cmd, "as", RT_DIR "start.s", "-o", BUILD_DIR "start.o");
+        if (!cmd_run(&cmd)) {
+            return 1;
+        }
+        cmd_append(&cmd, "ar", "r", BUILD_DIR "libelrstart.a", BUILD_DIR "start.o");
+        if (!cmd_run(&cmd)) {
+            return 1;
+        }
+    }
+
+    if (nob_needs_rebuild1(BUILD_DIR "libtrampoline.a", RT_DIR "trampoline.s")) {
+        cmd_append(&cmd, "as", RT_DIR "start.s", "-o", BUILD_DIR "trampoline.o");
+        if (!cmd_run(&cmd)) {
+            return 1;
+        }
+        cmd_append(&cmd, "ar", "r", BUILD_DIR "libtrampoline.a", BUILD_DIR "trampoline.o");
+        if (!cmd_run(&cmd)) {
+            return 1;
+        }
+    }
+
+    char const *rt_sources[] = {
+        "", RT_DIR "syscalls.inc"
+    };
+
+    bool rt_sources_updated = false;
+#undef S
+#define S(SRC)                                                               \
+    rt_sources[0] = RT_DIR #SRC ".s";                                        \
+    if (nob_needs_rebuild(BUILD_DIR #SRC ".o", sources, 2)) {                \
+        cmd_append(&cmd, "as", "-o", BUILD_DIR #SRC ".o", RT_DIR #SRC ".s"); \
+        if (!cmd_run(&cmd)) {                                                \
+            return 1;                                                        \
+        }                                                                    \
+        rt_sources_updated = true;                                           \
+    }
+    RT_SOURCES(S)
+    if (rt_sources_updated) {
+        cmd_append(&cmd, "ar", "r", BUILD_DIR "libelrrt.a",
+#undef S
+#define S(SRC) BUILD_DIR #SRC ".o",
+            RT_SOURCES(S));
+        if (!cmd_run(&cmd)) {
+            return 1;
+        }
+    }
+
+    if (true) {
         cmd_append(&cmd, BUILD_DIR "elrond", "helloworld.elr");
         if (!cmd_run(&cmd)) {
             return 1;

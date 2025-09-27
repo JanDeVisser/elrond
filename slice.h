@@ -230,7 +230,7 @@ slice_t slice_sub(slice_t slice, size_t start, size_t end)
 slice_t slice_sub_by_length(slice_t slice, size_t start, size_t num)
 {
     assert(start <= slice.len && start + num <= slice.len);
-    return slice_make(slice.items + start, slice.len - num);
+    return slice_make(slice.items + start, num);
 }
 
 bool slice_startswith(slice_t slice, slice_t head)

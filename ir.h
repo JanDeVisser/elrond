@@ -183,6 +183,7 @@ typedef struct _ir_generator {
 } ir_generator_t;
 
 slice_t        operation_type_name(ir_operation_type_t type);
+void           operation_list(FILE *f, operation_t const *op);
 void           generate(ir_generator_t *gen, nodeptr node);
 ir_generator_t generate_ir(parser_t *parser, nodeptr n);
 void           list(FILE *f, ir_generator_t *gen, nodeptr ir);

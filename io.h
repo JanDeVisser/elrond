@@ -76,6 +76,6 @@ int main()
     opt_sb_t contents = slurp_file(C("io.h"));
     assert(contents.ok);
     return 0;
-}    
+}
 
 #endif /* IO_TEST */

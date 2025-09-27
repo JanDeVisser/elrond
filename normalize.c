@@ -230,8 +230,9 @@ nodeptr StatementBlock_normalize(parser_t *parser, nodeptr n)
 
 nodeptr String_normalize(parser_t *parser, nodeptr n)
 {
-    sb_t unescaped = { 0 };
-    sb_unescape(&unescaped, N(n)->string.string);
+    sb_t    unescaped = { 0 };
+    node_t *node = N(n);
+    sb_unescape(&unescaped, slice_sub_by_length(node->string.string, 1, node->string.string.len - 2));
     value_t val = { .type = String, .slice = sb_as_slice(unescaped) };
     return parser_add_node(parser, NT_Constant, N(n)->location, .constant_value = OPTVAL(value_t, val));
 }

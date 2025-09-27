@@ -397,6 +397,7 @@ int process_start(process_t *proc)
     for (size_t ix = 0u; ix < sz; ++ix) {
         slice_t arg = proc->arguments.items[ix];
         strncpy(bufptr, arg.items, arg.len);
+        bufptr[arg.len] = 0;
         argv[ix + 1] = bufptr;
         bufptr = bufptr + arg.len + 1;
     }
