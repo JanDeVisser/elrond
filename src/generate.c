@@ -346,9 +346,11 @@ void generate_Function(ir_generator_t *gen, nodeptr n)
         ir_node_t function = {
             .type = IRN_Function,
             .ix = gen->ir_nodes.len,
+            .bound_type = node->bound_type,
             .function = {
                 .name = node->function.name,
                 .syntax_node = n,
+                .module = gen->ctxs.items[gen->ctxs.len - 1].ir_node,
                 .parameters = params,
                 .return_type = GN(sig->signature.return_type)->bound_type,
                 .operations = { 0 },
@@ -396,9 +398,11 @@ void generate_Module(ir_generator_t *gen, nodeptr n)
     ir_node_t module = {
         .type = IRN_Module,
         .ix = gen->ir_nodes.len,
+        .bound_type = node->bound_type,
         .module = {
             .name = node->module.name,
             .syntax_node = n,
+            .program = gen->ctxs.items[gen->ctxs.len - 1].ir_node,
             .variables = dynarr_copy(namespace_t, name_t, node->namespace.value),
             .functions = { 0 },
             .operations = { 0 },
@@ -433,6 +437,7 @@ void generate_Program(ir_generator_t *gen, nodeptr n)
     ir_node_t program = {
         .type = IRN_Program,
         .ix = gen->ir_nodes.len,
+        .bound_type = node->bound_type,
         .program = {
             .name = node->program.name,
             .syntax_node = n,
@@ -514,6 +519,7 @@ void generate_StatementBlock(ir_generator_t *gen, nodeptr n)
             .module = {
                 .name = C("anonymous"),
                 .syntax_node = n,
+                .program = nullptr,
                 .variables = { 0 },
                 .functions = { 0 },
                 .operations = { 0 },

@@ -17,19 +17,20 @@ Nob_Cmd cmd = { 0 };
     S(lexer, LEXER)     \
     S(cmdline, CMDLINE) \
     S(fs, FS)           \
-    S(process, PROCESS)
+    S(process, PROCESS) \
+    S(resolve, RESOLVE)
 
 #define APP_HEADERS(S) \
     S(arm64)           \
     S(elrondlexer)     \
     S(ir)              \
+    S(native)          \
     S(node)            \
     S(parser)          \
     S(operators)       \
     S(type)            \
-    S(value)
-#define NUM_HEADERS 8
-#define NUM_SOURCES 9
+    S(value)           \
+    S(interpreter)
 
 #define APP_SOURCES(S) \
     S(elrond)          \
@@ -37,12 +38,16 @@ Nob_Cmd cmd = { 0 };
     S(generate)        \
     S(parser)          \
     S(operators)       \
+    S(native)          \
     S(node)            \
     S(typespec)        \
     S(normalize)       \
     S(type)            \
     S(value)           \
-    S(bind)
+    S(bind)            \
+    S(stack)           \
+    S(interpreter)     \
+    S(execute)
 
 #define RT_SOURCES(S) \
     S(endln)          \
@@ -50,11 +55,69 @@ Nob_Cmd cmd = { 0 };
     S(puti)           \
     S(putln)          \
     S(puts)           \
-    S(strlen)
+    S(strlen)         \
+    S(to_string)
+
+int format_sources()
+{
+    cmd_append(&cmd, "clang-format", "-i", "bld.c");
+    if (!cmd_run(&cmd)) {
+        return 1;
+    }
+#undef S
+#define S(HDR, NAME)                                           \
+    cmd_append(&cmd, "clang-format", "-i", SRC_DIR #HDR ".h"); \
+    if (!cmd_run(&cmd)) {                                      \
+        return 1;                                              \
+    }
+    STB_HEADERS(S)
+#undef S
+#define S(SRC)                                                 \
+    cmd_append(&cmd, "clang-format", "-i", SRC_DIR #SRC ".c"); \
+    if (!cmd_run(&cmd)) {                                      \
+        return 1;                                              \
+    }
+    APP_SOURCES(S)
+#undef S
+#define S(HDR)                                                 \
+    cmd_append(&cmd, "clang-format", "-i", SRC_DIR #HDR ".h"); \
+    if (!cmd_run(&cmd)) {                                      \
+        return 1;                                              \
+    }
+    APP_HEADERS(S)
+#undef S
+    return 0;
+}
 
 int main(int argc, char **argv)
 {
+    chdir("/Users/jan/projects/elrond");
     NOB_GO_REBUILD_URSELF(argc, argv);
+
+    bool        rebuild = false;
+    char const *script = "helloworld.elr";
+    bool        run = true;
+    bool        format = false;
+
+    for (int ix = 1; ix < argc; ++ix) {
+        if (strcmp(argv[ix], "-B") == 0) {
+            rebuild = true;
+        }
+        if ((strcmp(argv[ix], "-S") == 0) && (ix < argc - 1)) {
+            script = argv[++ix];
+        }
+        if (strcmp(argv[ix], "--norun") == 0) {
+            run = false;
+        }
+        if (strcmp(argv[ix], "--format") == 0) {
+            format = true;
+        }
+    }
+
+    if (format) {
+        return format_sources();
+    }
+
     if (!nob_file_exists("build")) {
         mkdir_if_not_exists("build");
     }
@@ -62,52 +125,8 @@ int main(int argc, char **argv)
     if (cc == NULL) {
         cc = "cc";
     }
-    bool headers_updated = false;
-#undef S
-#define S(H, T)                                                                                                  \
-    if (headers_updated || nob_needs_rebuild1(BUILD_DIR #H, #H ".h")) {                                          \
-        cmd_append(&cmd, cc, "-D" #T "_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR #H, SRC_DIR #H ".h"); \
-        if (!cmd_run(&cmd)) {                                                                                    \
-            return 1;                                                                                            \
-        }                                                                                                        \
-        cmd_append(&cmd, BUILD_DIR #H);                                                                          \
-        if (!cmd_run(&cmd)) {                                                                                    \
-            return 1;                                                                                            \
-        }                                                                                                        \
-        headers_updated = true;                                                                                  \
-    }
-    STB_HEADERS(S)
 
-    char const *sources[] = {
-        "",
-#undef S
-#define S(H) SRC_DIR #H ".h",
-        APP_HEADERS(S)
-    };
-
-    bool sources_updated = false;
-#undef S
-#define S(SRC)                                                                                      \
-    sources[0] = SRC_DIR #SRC ".c";                                                                         \
-    if (headers_updated || nob_needs_rebuild(BUILD_DIR #SRC ".o", sources, 9)) {                    \
-        cmd_append(&cmd, cc, "-Wall", "-Wextra", "-c", "-g", "-o", BUILD_DIR #SRC ".o", SRC_DIR #SRC ".c"); \
-        if (!cmd_run(&cmd)) {                                                                       \
-            return 1;                                                                               \
-        }                                                                                           \
-        sources_updated = true;                                                                     \
-    }
-    APP_SOURCES(S)
-    if (sources_updated) {
-        cmd_append(&cmd, cc, "-o", BUILD_DIR "elrond",
-#undef S
-#define S(SRC) BUILD_DIR #SRC ".o",
-            APP_SOURCES(S) "-lm");
-        if (!cmd_run(&cmd)) {
-            return 1;
-        }
-    }
-
-    if (nob_needs_rebuild1(BUILD_DIR "libelrstart.a", RT_DIR "start.s")) {
+    if (rebuild || nob_needs_rebuild1(BUILD_DIR "libelrstart.a", RT_DIR "start.s")) {
         cmd_append(&cmd, "as", RT_DIR "start.s", "-o", BUILD_DIR "start.o");
         if (!cmd_run(&cmd)) {
             return 1;
@@ -118,8 +137,8 @@ int main(int argc, char **argv)
         }
     }
 
-    if (nob_needs_rebuild1(BUILD_DIR "libtrampoline.a", RT_DIR "trampoline.s")) {
-        cmd_append(&cmd, "as", RT_DIR "start.s", "-o", BUILD_DIR "trampoline.o");
+    if (rebuild || nob_needs_rebuild1(BUILD_DIR "libtrampoline.a", RT_DIR "trampoline.s")) {
+        cmd_append(&cmd, "as", RT_DIR "trampoline.s", "-o", BUILD_DIR "trampoline.o");
         if (!cmd_run(&cmd)) {
             return 1;
         }
@@ -133,16 +152,16 @@ int main(int argc, char **argv)
         "", RT_DIR "syscalls.inc"
     };
 
-    bool rt_sources_updated = false;
+    bool rt_sources_updated = rebuild;
 #undef S
-#define S(SRC)                                                               \
-    rt_sources[0] = RT_DIR #SRC ".s";                                        \
-    if (nob_needs_rebuild(BUILD_DIR #SRC ".o", sources, 2)) {                \
-        cmd_append(&cmd, "as", "-o", BUILD_DIR #SRC ".o", RT_DIR #SRC ".s"); \
-        if (!cmd_run(&cmd)) {                                                \
-            return 1;                                                        \
-        }                                                                    \
-        rt_sources_updated = true;                                           \
+#define S(SRC)                                                                                                \
+    rt_sources[0] = RT_DIR #SRC ".s";                                                                         \
+    if (rebuild || nob_needs_rebuild(BUILD_DIR #SRC ".o", rt_sources, sizeof(rt_sources) / sizeof(char *))) { \
+        cmd_append(&cmd, "as", "-o", BUILD_DIR #SRC ".o", RT_DIR #SRC ".s");                                  \
+        if (!cmd_run(&cmd)) {                                                                                 \
+            return 1;                                                                                         \
+        }                                                                                                     \
+        rt_sources_updated = true;                                                                            \
     }
     RT_SOURCES(S)
     if (rt_sources_updated) {
@@ -153,10 +172,63 @@ int main(int argc, char **argv)
         if (!cmd_run(&cmd)) {
             return 1;
         }
+
+        cmd_append(&cmd, "cc", "-dynamiclib", "-o", BUILD_DIR "libelrrt.dylib",
+#undef S
+#define S(SRC) BUILD_DIR #SRC ".o",
+            RT_SOURCES(S));
+        if (!cmd_run(&cmd)) {
+            return 1;
+        }
     }
 
-    if (true) {
-        cmd_append(&cmd, BUILD_DIR "elrond", "helloworld.elr");
+    bool headers_updated = rebuild;
+#undef S
+#define S(H, T)                                                                                                          \
+    if (headers_updated || nob_needs_rebuild1(BUILD_DIR #H, SRC_DIR #H ".h")) {                                          \
+        cmd_append(&cmd, cc, "-D" #T "_TEST", "-Wall", "-Wextra", "-g", "-x", "c", "-o", BUILD_DIR #H, SRC_DIR #H ".h"); \
+        if (!cmd_run(&cmd)) {                                                                                            \
+            return 1;                                                                                                    \
+        }                                                                                                                \
+        cmd_append(&cmd, BUILD_DIR #H);                                                                                  \
+        if (!cmd_run(&cmd)) {                                                                                            \
+            return 1;                                                                                                    \
+        }                                                                                                                \
+        headers_updated = true;                                                                                          \
+    }
+    STB_HEADERS(S)
+
+    char const *sources[] = {
+        "",
+#undef S
+#define S(H) SRC_DIR #H ".h",
+        APP_HEADERS(S)
+    };
+
+    bool sources_updated = false;
+#undef S
+#define S(SRC)                                                                                                  \
+    sources[0] = SRC_DIR #SRC ".c";                                                                             \
+    if (headers_updated || nob_needs_rebuild(BUILD_DIR #SRC ".o", sources, sizeof(sources) / sizeof(char *))) { \
+        cmd_append(&cmd, cc, "-Wall", "-Wextra", "-c", "-g", "-o", BUILD_DIR #SRC ".o", SRC_DIR #SRC ".c");     \
+        if (!cmd_run(&cmd)) {                                                                                   \
+            return 1;                                                                                           \
+        }                                                                                                       \
+        sources_updated = true;                                                                                 \
+    }
+    APP_SOURCES(S)
+    if (sources_updated) {
+        cmd_append(&cmd, cc, "-o", BUILD_DIR "elrond",
+#undef S
+#define S(SRC) BUILD_DIR #SRC ".o",
+            APP_SOURCES(S) "-Lbuild", "-ltrampoline", "-lm");
+        if (!cmd_run(&cmd)) {
+            return 1;
+        }
+    }
+
+    if (run) {
+        cmd_append(&cmd, BUILD_DIR "elrond", script);
         if (!cmd_run(&cmd)) {
             return 1;
         }

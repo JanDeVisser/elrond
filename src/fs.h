@@ -30,16 +30,19 @@ typedef struct _path {
 
 path_t  path_initialize(path_kind_t kind, ...);
 path_t  path_parse(slice_t p);
+path_t  path_append(path_t p, path_t sub);
 path_t  path_extend(path_t p, slice_t sub);
 slice_t path_extension(path_t *path);
 path_t *path_replace_extension(path_t *path, slice_t ext);
 path_t *path_strip_extension(path_t *path);
 void    path_free(path_t *path);
 
+#define path_copy(p) (path_parse(sb_as_slice(p.path)))
 #define path_make_relative(...) path_initialize(PATH_RELATIVE, ##__VA_ARGS__, NULL);
 
 #endif /* __FS_H__ */
 
+// #define FS_IMPLEMENTATION
 #ifdef FS_IMPLEMENTATION
 #ifndef FS_IMPLEMENTED
 
@@ -101,6 +104,11 @@ path_t path_parse(slice_t p)
     sb_append(&ret.path, p);
     path_reparse(&ret);
     return ret;
+}
+path_t path_append(path_t p, path_t sub)
+{
+    assert(sub.kind == PATH_RELATIVE);
+    return path_extend(p, sb_as_slice(sub.path));
 }
 
 path_t path_extend(path_t p, slice_t sub)

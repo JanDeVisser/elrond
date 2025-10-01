@@ -95,6 +95,7 @@ typedef DA(operation_t) operations_t;
 typedef struct _ir_function {
     slice_t      name;
     nodeptr      syntax_node;
+    nodeptr      module;
     namespace_t  parameters;
     nodeptr      return_type;
     operations_t operations;
@@ -103,6 +104,7 @@ typedef struct _ir_function {
 typedef struct _ir_module {
     slice_t      name;
     nodeptr      syntax_node;
+    nodeptr      program;
     namespace_t  variables;
     nodeptrs     functions;
     operations_t operations;
@@ -126,6 +128,7 @@ typedef enum _ir_node_type {
 typedef struct _ir_node {
     ir_node_type_t type;
     size_t         ix;
+    nodeptr        bound_type;
     union {
         ir_function_t function;
         ir_module_t   module;

@@ -39,28 +39,11 @@ typedef DA(uint64_t) uint64s;
 typedef DA(nodeptr) nodeptrs;
 OPTDEF(nodeptrs);
 
-#define dynarr_ensure(arr, C)                                            \
-    do {                                                                 \
-        size_t __mincap = (C);                                           \
-        if ((arr)->capacity < __mincap) {                                \
-            size_t __elem_size = sizeof(*((arr)->items));                \
-            size_t cap = ((arr)->capacity > 0) ? (arr)->capacity : 4;    \
-            while (cap < __mincap) {                                     \
-                cap *= 1.6;                                              \
-            }                                                            \
-            void *newitems = malloc(cap * __elem_size);                  \
-            memset(newitems, 0, cap *__elem_size);                       \
-            if (newitems == NULL) {                                      \
-                fprintf(stderr, "Out of memory.\n");                     \
-                abort();                                                 \
-            }                                                            \
-            if ((arr)->items) {                                          \
-                memcpy(newitems, (arr)->items, __elem_size *(arr)->len); \
-                free((arr)->items);                                      \
-            }                                                            \
-            (arr)->items = newitems;                                     \
-            (arr)->capacity = cap;                                       \
-        }                                                                \
+#define GENDA(da) (generic_da_t *) (da), sizeof(*((da)->items))
+
+#define dynarr_ensure(arr, mincap)               \
+    do {                                         \
+        generic_da_ensure(GENDA(arr), (mincap)); \
     } while (0)
 
 #define dynarr_copy(A, T, arr)                                        \
@@ -79,16 +62,8 @@ OPTDEF(nodeptrs);
             __copy;                                                   \
         })
 
-#define dynarr_clear(arr) \
-    do {                  \
-        (arr)->len = 0;   \
-    } while (0)
-
-#define dynarr_free(arr)                  \
-    do {                                  \
-        free((arr)->items);               \
-        (arr)->len = (arr)->capacity = 0; \
-    } while (0)
+#define dynarr_clear(arr) generic_da_clear(GENDA(arr))
+#define dynarr_free(arr) generic_da_free(GENDA(arr))
 
 #define dynarr_append(arr, elem)              \
     do {                                      \
@@ -133,8 +108,9 @@ OPTDEF(nodeptrs);
         })
 
 #define dynarr_eq(arr1, arr2) (dynarr_cmp((arr1), (arr2)) == 0)
+#define dynarr_as_slice(arr) (slice_make((arr).items, (arr).len))
 
-#define sb_as_slice(sb) (slice_make((sb).items, (sb).len))
+#define sb_as_slice(sb) dynarr_as_slice(sb)
 #define sb_clear(sb) dynarr_clear((sb))
 #define sb_free(sb) dynarr_free((sb))
 #define sb_append_char(sb, ch)              \
@@ -154,8 +130,8 @@ OPTDEF(nodeptrs);
             (__s);                \
         })
 
-int   generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size);
-sb_t *sb_append(sb_t *sb, slice_t slice);
+sb_t       *
+sb_append(sb_t *sb, slice_t slice);
 sb_t *sb_unescape(sb_t *sb, slice_t escaped);
 sb_t *sb_escape(sb_t *sb, slice_t slice);
 sb_t  sb_format(char const *fmt, ...) __attribute__((__format__(printf, 1, 2)));
@@ -163,12 +139,63 @@ sb_t  sb_vformat(char const *fmt, va_list args);
 sb_t *sb_printf(sb_t *sb, char const *fmt, ...) __attribute__((__format__(printf, 2, 3)));
 sb_t *sb_vprintf(sb_t *sb, char const *fmt, va_list args);
 
+void   generic_da_ensure(generic_da_t *arr, size_t elem_size, size_t mincap);
+size_t generic_da_append(generic_da_t *arr, size_t elem_size, void *elem);
+void   generic_da_clear(generic_da_t *arr, size_t elem_size);
+void   generic_da_free(generic_da_t *arr, size_t elem_size);
+int    generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size);
+
 #endif /* __DA_H__ */
 
 #ifdef DA_IMPLEMENTATION
 #undef DA_IMPLEMENTATION
 #ifndef DA_IMPLEMENTED
 #define DA_IMPLEMENTED
+
+void generic_da_ensure(generic_da_t *arr, size_t elem_size, size_t mincap)
+{
+    if (arr->capacity < mincap) {
+        size_t cap = (arr->capacity > 0) ? arr->capacity : 4;
+        while (cap < mincap) {
+            cap *= 1.6;
+        }
+        void *newitems = malloc(cap * elem_size);
+        memset(newitems, 0, cap * elem_size);
+        if (newitems == NULL) {
+            fprintf(stderr, "Out of memory.\n");
+            abort();
+        }
+        if (arr->items) {
+            memcpy(newitems, arr->items, elem_size * arr->len);
+            free(arr->items);
+        }
+        arr->items = newitems;
+        arr->capacity = cap;
+    }
+}
+
+size_t generic_da_append(generic_da_t *arr, size_t elem_size, void *elem)
+{
+    generic_da_ensure(arr, elem_size, arr->len + 1);
+    memcpy(arr->items + arr->len * elem_size, elem, elem_size);
+    ++arr->len;
+    return arr->len - 1;
+}
+
+void generic_da_clear(generic_da_t *arr, size_t elem_size)
+{
+    (void) elem_size;
+    arr->len = 0;
+}
+
+void generic_da_free(generic_da_t *arr, size_t elem_size)
+{
+    (void) elem_size;
+    free(arr->items);
+    arr->len = 0;
+    arr->items = NULL;
+    arr->capacity = 0;
+}
 
 int generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size)
 {

@@ -74,13 +74,15 @@ typedef struct _cmdline {
     slice_t            executable;
     slices_t           errors;
     cmdline_options_t  option_values;
+    slices_t           arguments;
 } cmdline_t;
 
 cmdline_t cmdline_parse_args(app_description_t *descr, int argc, char const **argv);
 
-void    parse_cmdline_args(app_description_t *descr, int argc, char const **argv);
-slice_t cmdline_value(char *opt);
-bool    cmdline_is_set(char *opt);
+void     parse_cmdline_args(app_description_t *descr, int argc, char const **argv);
+slice_t  cmdline_value(char *opt);
+bool     cmdline_is_set(char *opt);
+slices_t cmdline_arguments();
 
 #endif /* __CMDLINE_H__ */
 
@@ -218,7 +220,8 @@ cmdline_t cmdline_parse_args(app_description_t *descr, int argc, char const **ar
 
     ret.executable = ret.argv.items[0];
 
-    for (int ix = 1; ix < ret.argc; ++ix) {
+    int ix = 1;
+    for (ix = 1; ix < ret.argc; ++ix) {
         char const *arg = argv[ix];
         if (!strcmp(arg, "--help")) {
             help(&ret);
@@ -273,11 +276,16 @@ cmdline_t cmdline_parse_args(app_description_t *descr, int argc, char const **ar
     }
 
     if (ret.errors.len > 0) {
-        for (size_t ix = 0; ix < ret.errors.len; ++ix) {
-            fprintf(stderr, "Error: " SL "\n", SLARG(ret.errors.items[ix]));
+        for (size_t err_ix = 0; err_ix < ret.errors.len; ++err_ix) {
+            fprintf(stderr, "Error: " SL "\n", SLARG(ret.errors.items[err_ix]));
         }
         exit(1);
     }
+
+    for (; ix < ret.argc; ++ix) {
+        dynarr_append(&ret.arguments, ret.argv.items[ix]);
+    }
+
     return ret;
 }
 
@@ -318,6 +326,11 @@ bool cmdline_is_set(char *opt)
         }
     }
     return false;
+}
+
+slices_t cmdline_arguments()
+{
+    return _cmdline_args.arguments;
 }
 
 #define CMDLINE_IMPLEMENTED

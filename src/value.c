@@ -245,6 +245,40 @@ opt_double value_as_double(value_t val)
     }
 }
 
+value_t make_value_from_buffer(nodeptr type, void *buf)
+{
+    type_t *t = get_type(type);
+    switch (t->kind) {
+    case TYPK_IntType:
+        switch (t->int_type.code) {
+#undef S
+#define S(W, Signed, Code, Fld, T) \
+    case Code:                     \
+        return (value_t) { .type = type, .Fld = *((T *) buf) };
+            VALUE_INTFIELDS(S)
+        default:
+            UNREACHABLE();
+        }
+    case TYPK_FloatType:
+        switch (t->float_width) {
+        case FW_32:
+            return (value_t) { .type = type, .f32 = *((float *) buf) };
+        case FW_64:
+            return (value_t) { .type = type, .f64 = *((double *) buf) };
+        default:
+            UNREACHABLE();
+        }
+    case TYPK_BoolType:
+        return (value_t) { .type = type, .boolean = *((bool *) buf) };
+    case TYPK_SliceType:
+        return (value_t) { .type = type, .slice = *((slice_t *) buf) };
+    case TYPK_DynArrayType:
+        return (value_t) { .type = type, .da = *((generic_da_t *) buf) };
+    default:
+        UNREACHABLE();
+    }
+}
+
 void value_print(FILE *f, value_t value)
 {
     type_t *t = get_type(value.type);

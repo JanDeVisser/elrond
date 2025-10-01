@@ -78,8 +78,9 @@ static app_description_t app_descr = {
 int main(int argc, char const **argv)
 {
     parse_cmdline_args(&app_descr, argc, argv);
-    assert(argc > 1);
-    slice_t  file_name = C(argv[1]);
+    slices_t args = cmdline_arguments();
+    assert(args.len > 0);
+    slice_t  file_name = C(args.items[0].items);
     opt_sb_t contents_maybe = slurp_file(file_name);
     if (!contents_maybe.ok) {
         fprintf(stderr, "Error reading file `%.*s`\n", (int) file_name.len, file_name.items);

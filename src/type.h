@@ -60,6 +60,10 @@ typedef struct _enum_type {
     S(32)              \
     S(64)
 
+#define FLOATTYPES(S) \
+    S(32, float)      \
+    S(64, double)
+
 typedef enum _float_width {
     FW_32 = sizeof(float),
     FW_64 = sizeof(double),
@@ -70,6 +74,16 @@ typedef enum _float_width {
     S(16)            \
     S(32)            \
     S(64)
+
+#define INTTYPES(S)  \
+    S(I8, int8_t)    \
+    S(U8, uint8_t)   \
+    S(I16, int16_t)  \
+    S(U16, uint16_t) \
+    S(I32, int32_t)  \
+    S(U32, uint32_t) \
+    S(I64, int64_t)  \
+    S(U64, uint64_t)
 
 typedef enum _int_code {
 #undef S

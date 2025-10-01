@@ -25,11 +25,29 @@
 #define MAX(a, b) ((a > b) ? (a) : (b))
 #define ALIGNAT(bytes, align) ((bytes + (align - 1)) & ~(align - 1))
 
-#define UNREACHABLE()                                              \
-    do {                                                           \
-        fprintf(stderr, "%s:%d: Unreachable", __FILE__, __LINE__); \
-        exit(1);                                                   \
-    } while (0);
+#define _fatal(prefix, msg, ...)                        \
+    do {                                                \
+        fprintf(stderr, "%s:%d: ", __FILE__, __LINE__); \
+        fputs(prefix, stderr);                          \
+        fprintf(stderr, msg, ##__VA_ARGS__);            \
+        fputc('\n', stderr);                            \
+        abort();                                        \
+    } while (0)
+
+#define UNREACHABLE_MSG(msg, ...) _fatal("Unreachable", msg, ##__VA_ARGS__)
+#define UNREACHABLE() _fatal("Unreachable: ", "")
+#define NYI(msg, ...) _fatal("Not Yet Implemented: ", msg, ##__VA_ARGS__)
+#define fatal(msg, ...) _fatal("", msg, ##__VA_ARGS__);
+#ifdef NDEBUG
+#define trace(msg, ...)
+#else
+#define trace(msg, ...)                                 \
+    do {                                                \
+        fprintf(stderr, "%s:%d: ", __FILE__, __LINE__); \
+        fprintf(stderr, msg, ##__VA_ARGS__);            \
+        fputc('\n', stderr);                            \
+    } while (0)
+#endif
 
 #define OPT(T) opt_##T
 #define OPTDEF(T)                  \
