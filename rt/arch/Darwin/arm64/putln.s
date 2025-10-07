@@ -2,6 +2,8 @@
 
 .global elrond$putln
 .global _elrond$putln
+.globl elrond$putln
+.globl _elrond$putln
 
 //
 // putln - Print string followed by a newline character

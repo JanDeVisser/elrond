@@ -29,195 +29,214 @@ char const *node_type_name(nodetype_t type)
     }
 }
 
-void default_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void default_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) n;
     (void) indent;
-    fprintf(f, "\n");
+    sb_printf(sb, "\n");
 }
 
-void BinaryExpression_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void BinaryExpression_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, "%s\n", operator_name(n->binary_expression.op));
-    node_print(f, "LHS", tree, n->binary_expression.lhs, indent + 4);
-    node_print(f, "RHS", tree, n->binary_expression.rhs, indent + 4);
+    sb_printf(sb, "%s\n", operator_name(n->binary_expression.op));
+    node_to_string(sb, "LHS", tree, n->binary_expression.lhs, indent + 4);
+    node_to_string(sb, "RHS", tree, n->binary_expression.rhs, indent + 4);
 }
 
-void BoolConstant_print(FILE *f, nodes_t tree, node_t *n, int indent)
-{
-    (void) tree;
-    (void) indent;
-    fprintf(f, "%s\n", (n->bool_constant) ? "true" : "false");
-}
-
-void Break_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void BoolConstant_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    if (n->label.ok) {
-        fprintf(f, SL, SLARG(n->label.value));
-    }
+    sb_printf(sb, "%s\n", (n->bool_constant) ? "true" : "false");
 }
 
-void Continue_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Break_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
     if (n->label.ok) {
-        fprintf(f, SL, SLARG(n->label.value));
+        sb_printf(sb, SL, SLARG(n->label.value));
     }
-    fprintf(f, "\n");
 }
 
-void Call_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Continue_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, "\n");
-    node_print(f, "Callable", tree, n->function_call.callable, indent + 4);
-    node_print(f, "Arguments", tree, n->function_call.arguments, indent + 4);
+    (void) tree;
+    (void) indent;
+    if (n->label.ok) {
+        sb_printf(sb, SL, SLARG(n->label.value));
+    }
+    sb_printf(sb, "\n");
 }
 
-void Constant_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Call_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
+{
+    sb_printf(sb, "\n");
+    node_to_string(sb, "Callable", tree, n->function_call.callable, indent + 4);
+    node_to_string(sb, "Arguments", tree, n->function_call.arguments, indent + 4);
+}
+
+void Comptime_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
+{
+    sb_printf(sb, "\n");
+    if (!n->comptime.statements.ok) {
+        sb_printf(sb, "%*s", indent + 4, "");
+        sb_t escaped = { 0 }; // @leak @tempalloc
+        sb_escape(&escaped, n->comptime.raw_text);
+        sb_printf(sb, "Raw Text: " SL "\n", SLARG(escaped));
+    } else {
+        node_to_string(sb, "Statements", tree, n->comptime.statements, indent + 4);
+        if (n->comptime.output.ok) {
+            sb_printf(sb, "%*s", indent + 8, "");
+            sb_t escaped = { 0 }; // @leak @tempalloc
+            sb_escape(&escaped, n->comptime.raw_text);
+            sb_printf(sb, "Output: " SL "\n", SLARG(escaped));
+        }
+    }
+}
+
+void Constant_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
     if (n->constant_value.ok) {
-        value_print(f, n->constant_value.value);
+        value_print(sb, n->constant_value.value);
     }
-    fprintf(f, "\n");
+    sb_printf(sb, "\n");
 }
 
-void Defer_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Defer_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, "\n");
-    node_print(f, NULL, tree, n->statement, indent + 4);
+    sb_printf(sb, "\n");
+    node_to_string(sb, NULL, tree, n->statement, indent + 4);
 }
 
-void Embed_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Embed_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->identifier.id));
+    sb_printf(sb, SL "\n", SLARG(n->identifier.id));
 }
 
-void ExpressionList_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void ExpressionList_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, "%zu\n", n->expression_list.len);
+    sb_printf(sb, "%zu\n", n->expression_list.len);
     char buf[32];
     for (size_t ix = 0; ix < n->expression_list.len; ++ix) {
         snprintf(buf, 31, "Param %zu", ix);
-        node_print(f, buf, tree, n->expression_list.items[ix], indent + 4);
+        node_to_string(sb, buf, tree, n->expression_list.items[ix], indent + 4);
     }
 }
 
-void Enum_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Enum_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, SL, SLARG(n->enumeration.name));
+    sb_printf(sb, SL, SLARG(n->enumeration.name));
     /* if (n->enumeration.underlying.ok) { */
     /* 	slice_t type_name = type_string(tree, n->enumeration.underlying.value);
      */
-    /* 	fprintf(f, ": " SL, SLARG(type_name)); */
+    /* 	sb_printf(sb, ": " SL, SLARG(type_name)); */
     /* } */
-    fprintf(f, "\n");
+    sb_printf(sb, "\n");
     for (size_t ix = 0; ix < n->enumeration.values.len; ++ix) {
-        node_print(f, NULL, tree, n->enumeration.values.items[ix], indent + 4);
+        node_to_string(sb, NULL, tree, n->enumeration.values.items[ix], indent + 4);
     }
 }
 
-void EnumValue_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void EnumValue_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->variable_declaration.name));
+    sb_printf(sb, SL "\n", SLARG(n->variable_declaration.name));
 }
 
-void ForeignFunction_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void ForeignFunction_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->identifier.id));
+    sb_printf(sb, SL "\n", SLARG(n->identifier.id));
 }
 
-void Function_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Function_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, SL "\n", SLARG(n->function.name));
-    node_print(f, "Sig", tree, n->function.signature, indent + 4);
-    node_print(f, "Impl", tree, n->function.implementation, indent + 4);
+    sb_printf(sb, SL "\n", SLARG(n->function.name));
+    node_to_string(sb, "Sig", tree, n->function.signature, indent + 4);
+    node_to_string(sb, "Impl", tree, n->function.implementation, indent + 4);
 }
 
-void Identifier_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Identifier_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->identifier.id));
+    sb_printf(sb, SL "\n", SLARG(n->identifier.id));
 }
 
-void Module_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Module_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, SL "\n", SLARG(n->module.name));
+    sb_printf(sb, SL "\n", SLARG(n->module.name));
     for (size_t ix = 0; ix < n->module.statements.len; ++ix) {
-        node_print(f, NULL, tree, n->module.statements.items[ix], indent + 4);
+        node_to_string(sb, NULL, tree, n->module.statements.items[ix], indent + 4);
     }
 }
 
-void Number_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Number_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->number.number));
+    sb_printf(sb, SL "\n", SLARG(n->number.number));
 }
 
-void Parameter_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Parameter_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) indent;
-    fprintf(f, SL ": " SL, SLARG(n->variable_declaration.name), SLARG(typespec_to_string(tree, n->variable_declaration.type)));
-    fprintf(f, "\n");
+    sb_printf(sb, SL ": " SL, SLARG(n->variable_declaration.name), SLARG(typespec_to_string(tree, n->variable_declaration.type)));
+    sb_printf(sb, "\n");
 }
 
-void Program_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Program_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->program.name));
+    sb_printf(sb, SL "\n", SLARG(n->program.name));
     for (size_t ix = 0; ix < n->program.modules.len; ++ix) {
-        fprintf(f, "\n");
-        node_print(f, NULL, tree, n->program.modules.items[ix], 0);
+        sb_printf(sb, "\n");
+        node_to_string(sb, NULL, tree, n->program.modules.items[ix], 0);
     }
     for (size_t ix = 0; ix < n->program.statements.len; ++ix) {
-        node_print(f, NULL, tree, n->program.statements.items[ix], indent + 4);
+        node_to_string(sb, NULL, tree, n->program.statements.items[ix], indent + 4);
     }
 }
 
-void Return_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Return_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, "\n");
-    node_print(f, NULL, tree, n->statement, indent + 4);
+    sb_printf(sb, "\n");
+    node_to_string(sb, NULL, tree, n->statement, indent + 4);
 }
 
-void Signature_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void Signature_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, "func() ");
-    fprintf(f, SL, SLARG(typespec_to_string(tree, n->signature.return_type)));
-    fprintf(f, "\n");
+    sb_printf(sb, "func() ");
+    sb_printf(sb, SL, SLARG(typespec_to_string(tree, n->signature.return_type)));
+    sb_printf(sb, "\n");
     for (size_t ix = 0; ix < n->signature.parameters.len; ++ix) {
-        node_print(f, "Param", tree, n->signature.parameters.items[ix], indent + 4);
+        node_to_string(sb, "Param", tree, n->signature.parameters.items[ix], indent + 4);
     }
 }
 
-void StatementBlock_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void StatementBlock_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
-    fprintf(f, "\n");
+    sb_printf(sb, "\n");
     for (size_t ix = 0; ix < n->statement_block.statements.len; ++ix) {
-        node_print(f, NULL, tree, n->statement_block.statements.items[ix],
+        node_to_string(sb, NULL, tree, n->statement_block.statements.items[ix],
             indent + 4);
     }
 }
 
-void String_print(FILE *f, nodes_t tree, node_t *n, int indent)
+void String_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     (void) tree;
     (void) indent;
-    fprintf(f, SL "\n", SLARG(n->string.string));
+    sb_printf(sb, SL "\n", SLARG(n->string.string));
 }
 
 #define PRINTOVERRIDES(S) \
@@ -225,6 +244,7 @@ void String_print(FILE *f, nodes_t tree, node_t *n, int indent)
     S(BoolConstant)       \
     S(Break)              \
     S(Call)               \
+    S(Comptime)           \
     S(Constant)           \
     S(Continue)           \
     S(Defer)              \
@@ -244,7 +264,7 @@ void String_print(FILE *f, nodes_t tree, node_t *n, int indent)
     S(StatementBlock)     \
     S(String)
 
-typedef void (*print_fnc)(FILE *, nodes_t, node_t *, int);
+typedef void (*print_fnc)(sb_t *, nodes_t, node_t *, int);
 
 static bool      print_initialized = false;
 static print_fnc print_fncs[] = {
@@ -263,27 +283,33 @@ void initialize_print()
     print_initialized = true;
 }
 
-void node_print(FILE *f, char const *prefix, nodes_t tree, nodeptr ix,
-    int indent)
+void node_to_string(sb_t *sb, char const *prefix, nodes_t tree, nodeptr ix, int indent)
 {
     if (!print_initialized) {
         initialize_print();
     }
 
-    fprintf(f, "%4zu. ", ix.value);
+    sb_printf(sb, "%4zu. ", ix.value);
     if (indent > 0) {
-        fprintf(f, "%*s", indent, "");
+        sb_printf(sb, "%*s", indent, "");
     }
     if (prefix != NULL) {
-        fprintf(f, "%s: ", prefix);
+        sb_printf(sb, "%s: ", prefix);
     }
     node_t *n = tree.items + ix.value;
-    fprintf(f, "%4zu:%3zu %.*s | ",
+    sb_printf(sb, "%4zu:%3zu %.*s | ",
         n->location.line + 1,
         n->location.column + 1,
         SLARG(C(node_type_name(n->node_type))));
     if (n->bound_type.ok) {
-        fprintf(f, SL " | ", SLARG(type_to_string(n->bound_type)));
+        sb_printf(sb, SL " | ", SLARG(type_to_string(n->bound_type)));
     }
-    print_fncs[n->node_type](f, tree, n, indent);
+    print_fncs[n->node_type](sb, tree, n, indent);
+}
+
+void node_print(FILE *f, char const *prefix, nodes_t tree, nodeptr ix, int indent)
+{
+    sb_t sb = { 0 };
+    node_to_string(&sb, prefix, tree, ix, indent);
+    fprintf(f, SL "\n", SLARG(sb));
 }

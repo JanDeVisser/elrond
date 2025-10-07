@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "interpreter.h"
+#include "ir.h"
 #include "node.h"
 #include "operators.h"
 #include "parser.h"
@@ -158,14 +160,12 @@ nodeptr bind_block(parser_t *parser, nodeptr n, off_t offset)
 
 nodeptr BinaryExpression_bind(parser_t *parser, nodeptr n)
 {
-    node_t         *node = N(n);
-    tokenlocation_t location = node->location;
-    nodeptr         lhs = node->binary_expression.lhs;
-    operator_t      op = node->binary_expression.op;
-    nodeptr         rhs = node->binary_expression.rhs;
-    nodeptr         lhs_type = bind(parser, lhs);
-    node_t         *lhs_node = N(lhs);
-    nodeptr         lhs_value_type = node_value_type(node->binary_expression.lhs);
+    tokenlocation_t location = N(n)->location;
+    operator_t      op = N(n)->binary_expression.op;
+    nodeptr         lhs = N(n)->binary_expression.lhs;
+    nodeptr         rhs = N(n)->binary_expression.rhs;
+    nodeptr         lhs_type = bind(parser, N(n)->binary_expression.lhs);
+    nodeptr         lhs_value_type = node_value_type(N(n)->binary_expression.lhs);
 
     if (op == OP_MemberAccess) {
         if (type_kind(lhs_type) != TYPK_ReferenceType) {
@@ -181,19 +181,19 @@ nodeptr BinaryExpression_bind(parser_t *parser, nodeptr n)
                 location,
                 "Left hand side of member access operator must have struct type");
         }
-        if (NT(node->binary_expression.rhs) != NT_Identifier) {
+        if (NT(rhs) != NT_Identifier) {
             return parser_bind_error(
                 parser,
                 location,
                 "Right hand side of member access operator must be identifier");
         } else {
-            slice_t id = N(node->binary_expression.rhs)->identifier.id;
+            slice_t id = N(rhs)->identifier.id;
             nodeptr s = ref->referencing;
             assert(type_kind(s) == TYPK_StructType);
             type_t *strukt = get_type(s);
             for (size_t ix = 0; ix < strukt->struct_fields.len; ++ix) {
                 if (slice_eq(id, strukt->struct_fields.items[ix].name)) {
-                    node->bound_type = strukt->struct_fields.items[ix].type;
+                    N(n)->bound_type = strukt->struct_fields.items[ix].type;
                     return n;
                 }
             }
@@ -219,14 +219,14 @@ nodeptr BinaryExpression_bind(parser_t *parser, nodeptr n)
                 SLARG(type_to_string(rhs_value_type)),
                 SLARG(type_to_string(lhs_value_type)));
         }
-        node->bound_type = lhs_type;
+        N(n)->bound_type = lhs_type;
         return n;
     }
 
     if (op == OP_Cast) {
         if (NT(lhs) == NT_Constant && NT(rhs) == NT_TypeSpecification) {
             if (rhs_value_type.ok) {
-                if (value_coerce(lhs_node->constant_value.value, rhs_value_type).ok) {
+                if (value_coerce(N(lhs)->constant_value.value, rhs_value_type).ok) {
                     return rhs_value_type;
                 }
             }
@@ -268,6 +268,54 @@ nodeptr BinaryExpression_bind(parser_t *parser, nodeptr n)
         operator_name(op),
         SLARG(type_to_string(lhs_value_type)),
         SLARG(type_to_string(rhs_value_type)));
+}
+
+nodeptr Comptime_bind(parser_t *parser, nodeptr n)
+{
+    node_t *node = N(n);
+    size_t  bound = parser->bound;
+    nodeptr stmts = node->comptime.statements;
+    do {
+        parser->bound = 0;
+        node_bind(parser, stmts);
+        bound += parser->bound;
+    } while (!parser_bound_type(parser, stmts).ok && parser->bound != 0);
+    parser->bound = bound;
+    if (!parser_bound_type(parser, stmts).ok) {
+        return nullptr;
+    }
+    if (!node->comptime.output.ok) {
+        ir_generator_t gen = generate_ir(parser, stmts);
+        value_t        output = execute_ir(&gen, nodeptr_ptr(0));
+        if (output.type.value == String.value) {
+            node->comptime.output = OPTVAL(slice_t, output.slice);
+        } else {
+            node->comptime.output = OPTVAL(slice_t, (slice_t) { 0 });
+        }
+    }
+    if (node->comptime.output.value.len > 0) {
+        nodeptr inc = parse_snippet(parser, node->comptime.output.value);
+        if (inc.ok) {
+            if (inc.value != n.value) {
+                parser->nodes.items[n.value] = *N(inc);
+                if (inc.value == parser->nodes.len - 1) {
+                    dynarr_pop(&parser->nodes);
+                }
+            }
+            nodeptr normalized = node_normalize(parser, n);
+            if (!normalized.ok) {
+                return nullptr;
+            }
+            if (normalized.value != n.value) {
+                parser->nodes.items[n.value] = *N(normalized);
+                if (normalized.value == parser->nodes.len - 1) {
+                    dynarr_pop(&parser->nodes);
+                }
+            }
+            return node_bind(parser, n);
+        }
+    }
+    return Void;
 }
 
 nodeptr Constant_bind(parser_t *parser, nodeptr n)
@@ -318,8 +366,7 @@ nodeptr Call_bind(parser_t *parser, nodeptr n)
     if (callable->node_type == NT_Identifier) {
         node->function_call.declaration = callable->identifier.declaration;
     } else {
-        fprintf(stderr, "TODO: callable with node type `%s` in NT_Call node\n", node_type_name(callable->node_type));
-        abort();
+        fatal("TODO: callable with node type `%s` in NT_Call node", node_type_name(callable->node_type));
     }
     return sig->signature_type.result;
 }
@@ -339,20 +386,20 @@ nodeptr ForeignFunction_bind(parser_t *parser, nodeptr n)
 {
     (void) parser;
     (void) n;
-    printf("VOID ok: %d value: %zu kind: %d\n", Void.ok, Void.value, get_type(Void)->kind);
     return Void;
 }
 
 nodeptr Function_bind(parser_t *parser, nodeptr n)
 {
+    nodeptr sig = bind(parser, N(n)->function.signature);
     node_t *node = N(n);
-    nodeptr sig = bind(parser, node->function.signature);
     if (!node->namespace.ok) {
         parser_add_name(parser, node->function.name, sig, n);
         node->namespace.ok = true;
         dynarr_append(&parser->namespaces, n);
     }
     bind(parser, node->function.implementation);
+    node = N(n);
     node_t *impl = N(node->function.implementation);
     type_t *sig_type = get_type(sig);
     assert(sig_type->kind == TYPK_Signature);
@@ -392,9 +439,8 @@ nodeptr Parameter_bind(parser_t *parser, nodeptr n)
 
 nodeptr Program_bind(parser_t *parser, nodeptr n)
 {
-    node_t *node = N(n);
-    for (size_t ix = 0; ix < node->program.modules.len; ++ix) {
-        bind(parser, node->program.modules.items[ix]);
+    for (size_t ix = 0; ix < N(n)->program.modules.len; ++ix) {
+        bind(parser, N(n)->program.modules.items[ix]);
     }
     return bind_block(parser, n, offsetof(node_t, program.statements));
 }
@@ -406,14 +452,13 @@ nodeptr Return_bind(parser_t *parser, nodeptr n)
 
 nodeptr Signature_bind(parser_t *parser, nodeptr n)
 {
-    node_t  *node = N(n);
     nodeptrs parameters = { 0 };
-    for (size_t ix = 0; ix < node->signature.parameters.len; ++ix) {
-        bind(parser, node->signature.parameters.items[ix]);
-        dynarr_append(&parameters, N(node->signature.parameters.items[ix])->bound_type);
+    for (size_t ix = 0; ix < N(n)->signature.parameters.len; ++ix) {
+        bind(parser, N(n)->signature.parameters.items[ix]);
+        dynarr_append(&parameters, N(N(n)->signature.parameters.items[ix])->bound_type);
     }
-    bind(parser, node->signature.return_type);
-    return signature(parameters, N(node->signature.return_type)->bound_type);
+    bind(parser, N(n)->signature.return_type);
+    return signature(parameters, N(N(n)->signature.return_type)->bound_type);
 }
 
 nodeptr StatementBlock_bind(parser_t *parser, nodeptr n)
@@ -429,6 +474,7 @@ nodeptr TypeSpecification_bind(parser_t *parser, nodeptr n)
 #define BINDOVERRIDES(S) \
     S(BinaryExpression)  \
     S(Call)              \
+    S(Comptime)          \
     S(Constant)          \
     S(ExpressionList)    \
     S(ForeignFunction)   \
@@ -468,7 +514,7 @@ nodeptr node_bind(parser_t *parser, nodeptr ix)
     if (node->bound_type.ok) {
         return ix;
     }
-    printf("bind %zu = %s\n", ix.value, node_type_name(node->node_type));
+    trace("bind %zu = %s", ix.value, node_type_name(node->node_type));
     if (node->namespace.ok) {
         dynarr_append(&parser->namespaces, ix);
     }
@@ -477,15 +523,14 @@ nodeptr node_bind(parser_t *parser, nodeptr ix)
         dynarr_pop(&parser->namespaces);
     }
     if (ret.ok) {
-        printf("result %zu = %s",
-            ix.value, node_type_name(parser_node(parser, ix)->node_type));
-        printf(" bound type = %zu " SL, ret.value, SLARG(type_kind_name(ret)));
-        printf(" " SL " ", SLARG(type_to_string(ret)));
-        printf("\n");
+        trace("result %zu = %s bound_type %zu " SL " " SL,
+            ix.value, node_type_name(parser_node(parser, ix)->node_type),
+            ret.value, SLARG(type_kind_name(ret)),
+            SLARG(type_to_string(ret)));
         N(ix)->bound_type = ret;
         ++parser->bound;
     } else {
-        printf("result %zu = %s => NULL\n",
+        trace("result %zu = %s => NULL",
             ix.value, node_type_name(parser_node(parser, ix)->node_type));
         N(ix)->bound_type = nullptr;
     }

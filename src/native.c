@@ -71,7 +71,7 @@ bool native_call(slice_t name, void *params, nodeptrs types, void *return_value,
     for (size_t ix = 0; ix < types.len; ++ix) {
         nodeptr type = types.items[ix];
 
-        trace("native_call param [%zu]: `" SL, ix, SLARG(type_to_string(type)));
+        trace("native_call param [%zu]: %zu `" SL "`", ix, type.value, SLARG(type_to_string(type)));
         // Stage B – Pre-padding and extension of arguments
         // For each argument in the list the first matching rule from the
         // following list is applied. If no rule matches the argument is used
@@ -299,7 +299,7 @@ bool native_call(slice_t name, void *params, nodeptrs types, void *return_value,
     }
 
     trace("Trampoline:");
-    trace("  Function: %lu", (intptr_t) (t.fnc));
+    trace("  Function: 0x%lx", (intptr_t) (t.fnc));
     trace("  Integer Registers:");
     for (size_t ix = 0; ix < 8; ++ix) {
         trace("    %zu: 0x%zx", ix, (size_t) t.x[ix]);

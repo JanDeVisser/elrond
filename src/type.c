@@ -86,27 +86,13 @@ typedef struct _type_name {
             type_t __t = { .kind = (k), .str = { 0 }, __VA_ARGS__ };               \
             dynarr_append(&type_registry, __t);                                    \
             nodeptr __ret = OPTVAL(size_t, type_registry.len - 1);                 \
-            printf("Created type %zu: %d " SL "\n",                                \
+            trace("Created type %zu: %d " SL,                                      \
                 __ret.value, get_type(__ret)->kind, SLARG(type_kind_name(__ret))); \
             __ret;                                                                 \
         })
 
 static DA(type_t) type_registry = { 0 };
 static DA(type_name_t) type_by_name = { 0 };
-
-/* ------------------------------------------------------------------------ */
-
-intptr_t align_at(intptr_t alignment, intptr_t bytes)
-{
-    assert(alignment > 0 && (alignment & (alignment - 1)) == 0); // Align must be power of 2
-    return (bytes + (alignment - 1)) & ~(alignment - 1);
-}
-
-intptr_t words_needed(intptr_t word_size, intptr_t bytes)
-{
-    size_t ret = bytes / word_size;
-    return (bytes % word_size != 0) ? ret + 1 : ret;
-}
 
 /* ------------------------------------------------------------------------ */
 
@@ -716,10 +702,10 @@ nodeptr typelist_of(nodeptrs types)
     for (size_t ix = 0; ix < type_registry.len; ++ix) {
         if (type_registry.items[ix].kind == TYPK_TypeList
             && type_registry.items[ix].type_list_types.len == types.len) {
-            bool all_matched = true;
-            for (size_t ix = 0; ix < types.len; ++ix) {
-                if (types.items[ix].value
-                    != type_registry.items[ix].type_list_types.items[ix].value) {
+            type_t *t = type_registry.items + ix;
+            bool    all_matched = true;
+            for (size_t iix = 0; iix < types.len; ++iix) {
+                if (types.items[iix].value != t->type_list_types.items[iix].value) {
                     all_matched = false;
                     break;
                 }
@@ -805,7 +791,7 @@ type_t *get_type(nodeptr p)
 
 nodeptr find_type(slice_t name)
 {
-    printf("find_type(" SL ")\n", SLARG(name));
+    trace("find_type(" SL ")", SLARG(name));
     while (true) {
         for (size_t ix = 0; ix < type_by_name.len; ++ix) {
             if (slice_eq(name, type_by_name.items[ix].name)) {
@@ -816,7 +802,7 @@ nodeptr find_type(slice_t name)
                     type = t->alias_of;
                     t = GETTYPE(type);
                 }
-                printf("find_type: found %zu\n", type.value);
+                trace("find_type: found %zu", type.value);
                 return type;
             }
         }

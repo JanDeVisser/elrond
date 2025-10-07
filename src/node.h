@@ -16,6 +16,7 @@
     S(BoolConstant)        \
     S(Break)               \
     S(Call)                \
+    S(Comptime)            \
     S(Constant)            \
     S(Continue)            \
     S(Defer)               \
@@ -31,7 +32,6 @@
     S(IfStatement)         \
     S(Import)              \
     S(Include)             \
-    S(Insert)              \
     S(LoopStatement)       \
     S(Module)              \
     S(Null)                \
@@ -80,6 +80,12 @@ typedef struct _call {
     nodeptr arguments;
     nodeptr declaration;
 } call_t;
+
+typedef struct _comptime {
+    slice_t     raw_text;
+    nodeptr     statements;
+    opt_slice_t output;
+} comptime_t;
 
 typedef struct _enumeration {
     slice_t  name;
@@ -235,6 +241,7 @@ typedef struct _node {
         binary_expression_t    binary_expression;
         bool                   bool_constant;
         call_t                 function_call;
+        comptime_t             comptime;
         opt_value_t            constant_value;
         enumeration_t          enumeration;
         enum_value_t           enum_value;
@@ -248,7 +255,6 @@ typedef struct _node {
         module_t               module;
         number_t               number;
         program_t              program;
-        slice_t                raw_text;
         variable_declaration_t variable_declaration;
         public_declaration_t   public_declaration;
         signature_t            signature;
@@ -271,9 +277,11 @@ typedef DA(node_t) nodes_t;
 nodeptr     typespec_resolve(type_specification_t typespec);
 slice_t     typespec_to_string(nodes_t tree, nodeptr typespec);
 char const *node_type_name(nodetype_t type);
+void        node_to_string(sb_t *sb, char const *prefix, nodes_t tree, nodeptr ix, int indent);
 void        node_print(FILE *f, char const *prefix, nodes_t tree, nodeptr ix, int indent);
 nodeptr     node_normalize(struct _parser *parser, nodeptr ix);
 nodeptr     node_bind(struct _parser *parser, nodeptr ix);
+node_t     *node_relocate(struct _parser *parser, node_t *node, ssize_t offset);
 
 #define node_value_type(node)                    \
     (                                            \

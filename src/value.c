@@ -279,41 +279,41 @@ value_t make_value_from_buffer(nodeptr type, void *buf)
     }
 }
 
-void value_print(FILE *f, value_t value)
+void value_print(sb_t *sb, value_t value)
 {
     type_t *t = get_type(value.type);
     switch (t->kind) {
     case TYPK_BoolType:
-        fprintf(f, "%s", (value.boolean) ? "true" : "false");
+        sb_printf(sb, "%s", (value.boolean) ? "true" : "false");
         break;
     case TYPK_VoidType:
-        fputs("(null)", f);
+        sb_append_cstr(sb, "(null)");
         break;
     case TYPK_IntType:
         switch (t->int_type.code) {
         case IC_U8:
-            fprintf(f, "%ud", value.u8);
+            sb_printf(sb, "%ud", value.u8);
             break;
         case IC_U16:
-            fprintf(f, "%ud", value.u16);
+            sb_printf(sb, "%ud", value.u16);
             break;
         case IC_U32:
-            fprintf(f, "%ud", value.u32);
+            sb_printf(sb, "%ud", value.u32);
             break;
         case IC_U64:
-            fprintf(f, "%lld", value.u64);
+            sb_printf(sb, "%lld", value.u64);
             break;
         case IC_I8:
-            fprintf(f, "%d", value.i8);
+            sb_printf(sb, "%d", value.i8);
             break;
         case IC_I16:
-            fprintf(f, "%d", value.i16);
+            sb_printf(sb, "%d", value.i16);
             break;
         case IC_I32:
-            fprintf(f, "%d", value.i32);
+            sb_printf(sb, "%d", value.i32);
             break;
         case IC_I64:
-            fprintf(f, "%lld", value.i64);
+            sb_printf(sb, "%lld", value.i64);
             break;
         default:
             UNREACHABLE();
@@ -322,17 +322,17 @@ void value_print(FILE *f, value_t value)
     case TYPK_FloatType:
         switch (t->float_width) {
         case FW_32:
-            fprintf(f, "%f", value.f32);
+            sb_printf(sb, "%f", value.f32);
             break;
         case FW_64:
-            fprintf(f, "%f", value.f64);
+            sb_printf(sb, "%f", value.f64);
             break;
         }
         break;
     case TYPK_SliceType: {
         sb_t escaped = { 0 };
         sb_escape(&escaped, value.slice);
-        fprintf(f, SL, SLARG(sb_as_slice(escaped)));
+        sb_printf(sb, SL, SLARG(sb_as_slice(escaped)));
     } break;
     default:
         UNREACHABLE();

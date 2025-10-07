@@ -184,8 +184,6 @@ extern nodeptr Void;
 extern nodeptr Pointer;
 extern nodeptr VoidFnc;
 
-intptr_t align_at(intptr_t alignment, intptr_t value);
-intptr_t words_needed(intptr_t word_size, intptr_t bytes);
 slice_t  type_kind_name(nodeptr p);
 slice_t  type_to_string(nodeptr p);
 intptr_t type_align_of(nodeptr p);

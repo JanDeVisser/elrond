@@ -181,7 +181,7 @@ void execute_Label(interpreter_t *interpreter, operation_t *op)
 void execute_NativeCall(interpreter_t *interpreter, operation_t *op)
 {
     intptr_t depth = 0;
-    nodeptrs types;
+    nodeptrs types = { 0 };
     for (size_t ix = 0; ix < op->NativeCall.parameters.len; ++ix) {
         name_t *param = op->NativeCall.parameters.items + ix;
         depth += align_at(8, type_size_of(param->type)) / sizeof(intptr_t);

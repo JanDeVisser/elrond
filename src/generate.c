@@ -33,9 +33,9 @@
 
 typedef void (*generate_fnc)(ir_generator_t *, nodeptr n);
 
-static void function_list(FILE *f, ir_generator_t *gen, nodeptr ir);
-static void module_list(FILE *f, ir_generator_t *gen, nodeptr ir);
-static void program_list(FILE *f, ir_generator_t *gen, nodeptr ir);
+static void function_list(sb_t *sb, ir_generator_t *gen, nodeptr ir);
+static void module_list(sb_t *sb, ir_generator_t *gen, nodeptr ir);
+static void program_list(sb_t *sb, ir_generator_t *gen, nodeptr ir);
 
 static void generate_default(ir_generator_t *gen, nodeptr n);
 #undef S
@@ -71,66 +71,75 @@ slice_t operation_type_name(ir_operation_type_t type)
     }
 }
 
-void operation_list(FILE *f, operation_t const *op)
+void operation_list(sb_t *sb, operation_t const *op)
 {
     if (op->type == IRO_Label) {
-        fprintf(f, "%lld:\n", op->Label);
+        sb_printf(sb, "%lld:", op->Label);
         return;
     }
     slice_t type_name = operation_type_name(op->type);
-    fprintf(f, "    " SL, SLARG(type_name));
-    fprintf(f, "%*s", 15 - (int) type_name.len, "");
+    sb_printf(sb, "    " SL, SLARG(type_name));
+    sb_printf(sb, "%*s", 15 - (int) type_name.len, "");
     switch (op->type) {
     case IRO_Break:
-        fprintf(f, "scope_end %llu depth %llu label %llu exit_type %zu", op->Break.scope_end, op->Break.depth, op->Break.label, op->Break.exit_type.value);
+        sb_printf(sb, "scope_end %llu depth %llu label %llu exit_type %zu", op->Break.scope_end, op->Break.depth, op->Break.label, op->Break.exit_type.value);
         break;
     case IRO_PushConstant:
-        value_print(f, op->PushConstant);
+        value_print(sb, op->PushConstant);
         break;
     case IRO_Call:
     case IRO_NativeCall:
-        fprintf(f, SL, SLARG(op->Call.name));
+        sb_printf(sb, SL " " SL "(", SLARG(type_to_string(op->NativeCall.return_type)), SLARG(op->NativeCall.name));
+        for (size_t ix = 0; ix < op->NativeCall.parameters.len; ++ix) {
+            if (ix > 0) {
+                sb_append_cstr(sb, ", ");
+            }
+            sb_append(sb, type_to_string(op->NativeCall.parameters.items[ix].type));
+        }
+        sb_append_char(sb, ')');
         break;
     case IRO_Pop:
-        fprintf(f, SL, SLARG(type_to_string(op->Pop)));
+        sb_printf(sb, SL, SLARG(type_to_string(op->Pop)));
     default:
         break;
     }
-    fprintf(f, "\n");
 }
 
-void function_list(FILE *f, ir_generator_t *gen, nodeptr ir)
+void function_list(sb_t *sb, ir_generator_t *gen, nodeptr ir)
 {
     ir_node_t *func = gen->ir_nodes.items + ir.value;
-    fprintf(f, "== [F] = " SL " ===================\n", SLARG(func->function.name));
+    sb_printf(sb, "== [F] = " SL " ===================\n", SLARG(func->function.name));
     for (size_t ix = 0; ix < func->function.operations.len; ++ix) {
-        operation_list(f, func->function.operations.items + ix);
+        operation_list(sb, func->function.operations.items + ix);
+        sb_append_char(sb, '\n');
     }
 }
 
-void module_list(FILE *f, ir_generator_t *gen, nodeptr ir)
+void module_list(sb_t *sb, ir_generator_t *gen, nodeptr ir)
 {
     ir_node_t *mod = gen->ir_nodes.items + ir.value;
-    fprintf(f, "== [M] = " SL " ===================\n\n", SLARG(mod->module.name));
+    sb_printf(sb, "== [M] = " SL " ===================\n\n", SLARG(mod->module.name));
     for (size_t ix = 0; ix < mod->module.operations.len; ++ix) {
-        operation_list(f, mod->module.operations.items + ix);
+        operation_list(sb, mod->module.operations.items + ix);
+        sb_append_char(sb, '\n');
     }
-    fprintf(f, "\n");
+    sb_append_char(sb, '\n');
     for (size_t ix = 0; ix < mod->module.functions.len; ++ix) {
-        function_list(f, gen, mod->module.functions.items[ix]);
+        function_list(sb, gen, mod->module.functions.items[ix]);
     }
 }
 
-void program_list(FILE *f, ir_generator_t *gen, nodeptr ir)
+void program_list(sb_t *sb, ir_generator_t *gen, nodeptr ir)
 {
     ir_node_t *prog = gen->ir_nodes.items + ir.value;
-    fprintf(f, "== [P] = " SL " ===================\n\n", SLARG(prog->program.name));
+    sb_printf(sb, "== [P] = " SL " ===================\n\n", SLARG(prog->program.name));
     for (size_t ix = 0; ix < prog->program.operations.len; ++ix) {
-        operation_list(f, prog->program.operations.items + ix);
+        operation_list(sb, prog->program.operations.items + ix);
+        sb_append_char(sb, '\n');
     }
-    fprintf(f, "\n");
+    sb_append_char(sb, '\n');
     for (size_t ix = 0; ix < prog->program.modules.len; ++ix) {
-        module_list(f, gen, prog->program.modules.items[ix]);
+        module_list(sb, gen, prog->program.modules.items[ix]);
     }
 }
 
@@ -139,17 +148,19 @@ void list(FILE *f, ir_generator_t *gen, nodeptr ir)
     assert(ir.ok);
     assert(ir.value < gen->ir_nodes.len);
     ir_node_t *n = gen->ir_nodes.items + ir.value;
+    sb_t       list = { 0 };
     switch (n->type) {
     case IRN_Function:
-        function_list(f, gen, ir);
+        function_list(&list, gen, ir);
         break;
     case IRN_Module:
-        module_list(f, gen, ir);
+        module_list(&list, gen, ir);
         break;
     case IRN_Program:
-        program_list(f, gen, ir);
+        program_list(&list, gen, ir);
         break;
     }
+    fprintf(f, SL "\n", SLARG(list));
 }
 
 void generator_add_operation(ir_generator_t *gen, operation_t op)
@@ -180,6 +191,9 @@ void generator_add_operation(ir_generator_t *gen, operation_t op)
                 return;
             }
         }
+        sb_t op_string = { 0 };
+        operation_list(&op_string, &op);
+        trace("Appending op " SL, SLARG(op_string));
         dynarr_append(ops, op);
         return;
     }
@@ -233,7 +247,7 @@ nodeptr find_ir_node(ir_generator_t const *gen, ir_node_type_t type)
 
 void generate_default(ir_generator_t *gen, nodeptr n)
 {
-    printf("generate_node(%s)\n", node_type_name(GN(n)->node_type));
+    trace("generate_node(%s)", node_type_name(GN(n)->node_type));
 }
 
 /*
@@ -512,12 +526,15 @@ void generate_Return(ir_generator_t *gen, nodeptr n)
 void generate_StatementBlock(ir_generator_t *gen, nodeptr n)
 {
     node_t *node = GN(n);
+    bool    pop_mod_ctx = false;
     if (gen->ctxs.len == 0) {
+        sb_t      mod_name = sb_format("comptime %zu", node->location.line);
         ir_node_t module = {
             .type = IRN_Module,
             .ix = gen->ir_nodes.len,
+            .bound_type = node->bound_type,
             .module = {
-                .name = C("anonymous"),
+                .name = sb_as_slice(mod_name),
                 .syntax_node = n,
                 .program = nullptr,
                 .variables = { 0 },
@@ -527,6 +544,7 @@ void generate_StatementBlock(ir_generator_t *gen, nodeptr n)
         };
         dynarr_append(&gen->ir_nodes, module);
         dynarr_append_s(ir_context_t, &gen->ctxs, .ir_node = OPTVAL(size_t, module.ix));
+        pop_mod_ctx = true;
     }
     namespace_t variables = { 0 };
     for (size_t ix = 0; ix < node->namespace.value.len; ++ix) {
@@ -597,6 +615,9 @@ void generate_StatementBlock(ir_generator_t *gen, nodeptr n)
                                         .has_defers = has_defered,
                                         .exit_type = node->bound_type,
                                     });
+    if (pop_mod_ctx) {
+        dynarr_pop(&gen->ctxs);
+    }
 }
 
 /*
@@ -816,7 +837,7 @@ void generate(ir_generator_t *gen, nodeptr n)
         initialize_generate();
     }
     node_t *node = GN(n);
-    printf("generate %zu = %s\n", n.value, node_type_name(node->node_type));
+    trace("generate %zu = %s", n.value, node_type_name(node->node_type));
     generate_fncs[node->node_type](gen, n);
 }
 
@@ -826,6 +847,5 @@ ir_generator_t generate_ir(parser_t *parser, nodeptr node)
     generator.parser = parser;
     generate(&generator, node);
     assert(generator.ctxs.len == 0);
-    printf("ir nodes: %zu\n", generator.ir_nodes.len);
     return generator;
 }

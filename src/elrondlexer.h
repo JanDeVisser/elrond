@@ -9,52 +9,59 @@
 #ifndef __ELRONDLEXER_H__
 #define __ELRONDLEXER_H__
 
-typedef enum {
-    KW_AssignAnd,
-    KW_AssignDecrement,
-    KW_AssignDivide,
-    KW_AssignIncrement,
-    KW_AssignModulo,
-    KW_AssignMultiply,
-    KW_AssignOr,
-    KW_AssignShiftLeft,
-    KW_AssignShiftRight,
-    KW_AssignXor,
-    KW_Break,
-    KW_Cast,
-    KW_Const,
-    KW_Continue,
-    KW_Defer,
-    KW_Else,
-    KW_Embed,
-    KW_Enum,
-    KW_Equals,
-    KW_Error,
-    KW_False,
-    KW_ForeignLink,
-    KW_For,
-    KW_Func,
-    KW_GreaterEqual,
-    KW_If,
-    KW_Import,
-    KW_Include,
-    KW_LessEqual,
-    KW_LogicalAnd,
-    KW_LogicalOr,
-    KW_Loop,
-    KW_NotEqual,
-    KW_Null,
-    KW_Public,
-    KW_Range,
-    KW_Return,
-    KW_ShiftLeft,
-    KW_ShiftRight,
-    KW_Sizeof,
-    KW_Struct,
-    KW_True,
-    KW_Var,
-    KW_While,
-    KW_Yield,
+#define KEYWORDS(S)            \
+    S(AssignAnd, "&=")         \
+    S(AssignDecrement, "-=")   \
+    S(AssignDivide, "/=")      \
+    S(AssignIncrement, "+=")   \
+    S(AssignModulo, "%=")      \
+    S(AssignMultiply, "*=")    \
+    S(AssignOr, "|=")          \
+    S(AssignShiftLeft, "<<=")  \
+    S(AssignShiftRight, ">>=") \
+    S(AssignXor, "^=")         \
+    S(Break, "break")          \
+    S(Cast, "::")              \
+    S(Const, "const")          \
+    S(Continue, "continue")    \
+    S(Defer, "defer")          \
+    S(Else, "else")            \
+    S(Embed, "@embed")         \
+    S(Enum, "enum")            \
+    S(Equals, "==")            \
+    S(Error, "error")          \
+    S(False, "false")          \
+    S(ForeignLink, "->")       \
+    S(For, "for")              \
+    S(Func, "func")            \
+    S(GreaterEqual, ">=")      \
+    S(If, "if")                \
+    S(Import, "import")        \
+    S(Include, "@include")     \
+    S(LessEqual, "<=")         \
+    S(LogicalAnd, "&&")        \
+    S(LogicalOr, "||")         \
+    S(Loop, "loop")            \
+    S(NotEqual, "!=")          \
+    S(Null, "null")            \
+    S(Public, "public")        \
+    S(Range, "range")          \
+    S(Return, "return")        \
+    S(ShiftLeft, "<<")         \
+    S(ShiftRight, ">>")        \
+    S(Sizeof, "sizeof")        \
+    S(Struct, "struct")        \
+    S(True, "true")            \
+    S(Var, "var")              \
+    S(While, "while")          \
+    S(Yield, "yield")          \
+    S(Max, "")
+
+typedef enum _elrondkeyword {
+#undef S
+#define S(K, Str) KW_##K,
+    KEYWORDS(S)
+#undef S
 } elrondkeyword_t;
 
 extern slice_t elrond_keywords[];

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifdef SLICE_TEST
+#if defined(SLICE_TEST) || defined(ELROND_IMPLEMENTATION)
 #define SLICE_IMPLEMENTATION
 #endif
 
@@ -25,19 +25,21 @@
 #define MAX(a, b) ((a > b) ? (a) : (b))
 #define ALIGNAT(bytes, align) ((bytes + (align - 1)) & ~(align - 1))
 
-#define _fatal(prefix, msg, ...)                        \
-    do {                                                \
-        fprintf(stderr, "%s:%d: ", __FILE__, __LINE__); \
-        fputs(prefix, stderr);                          \
-        fprintf(stderr, msg, ##__VA_ARGS__);            \
-        fputc('\n', stderr);                            \
-        abort();                                        \
+#define _fatal(file, line, prefix, msg, ...)    \
+    do {                                        \
+        fprintf(stderr, "%s:%d: ", file, line); \
+        fputs(prefix, stderr);                  \
+        fprintf(stderr, msg, ##__VA_ARGS__);    \
+        fputc('\n', stderr);                    \
+        abort();                                \
     } while (0)
 
-#define UNREACHABLE_MSG(msg, ...) _fatal("Unreachable", msg, ##__VA_ARGS__)
-#define UNREACHABLE() _fatal("Unreachable: ", "")
-#define NYI(msg, ...) _fatal("Not Yet Implemented: ", msg, ##__VA_ARGS__)
-#define fatal(msg, ...) _fatal("", msg, ##__VA_ARGS__);
+#define UNREACHABLE_MSG(msg, ...) _fatal(__FILE__, __LINE__, "Unreachable", msg, ##__VA_ARGS__)
+#define UNREACHABLE() _fatal(__FILE__, __LINE__, "Unreachable: ", "")
+#define TODO(msg, ...) _fatal(__FILE__, __LINE__, "Not Yet Implemented: ", msg, ##__VA_ARGS__)
+#define NYI(msg, ...) TODO(msg, ##__VA_ARGS__)
+#define fatal(msg, ...) _fatal(__FILE__, __LINE__, "", msg, ##__VA_ARGS__);
+#define fatal_file_line(f, l, msg, ...) _fatal(f, l, "", msg, ##__VA_ARGS__);
 #ifdef NDEBUG
 #define trace(msg, ...)
 #else
@@ -48,6 +50,68 @@
         fputc('\n', stderr);                            \
     } while (0)
 #endif
+
+#define ALLOCATOR_VTABLE                                                                \
+    void *(*alloc)(allocator_t * alloc, size_t size);                                   \
+    void *(*realloc)(allocator_t * alloc, void *ptr, size_t old_size, size_t new_size); \
+    void (*free)(allocator_t * alloc, void *ptr);                                       \
+    void (*destroy)(allocator_t * alloc);                                               \
+    allocator_t *prev_allocator;
+
+typedef struct _allocator allocator_t;
+struct _allocator {
+    ALLOCATOR_VTABLE;
+};
+
+void *stdc_alloc(allocator_t *alloc, size_t size);
+void *stdc_realloc(allocator_t *alloc, void *ptr, size_t old_size, size_t new_size);
+void  stdc_free(allocator_t *alloc, void *ptr);
+
+static allocator_t stdc_allocator = {
+    .alloc = stdc_alloc,
+    .realloc = stdc_realloc,
+    .free = stdc_free,
+    .destroy = NULL,
+    .prev_allocator = NULL,
+};
+
+static allocator_t *current_allocator = &stdc_allocator;
+
+void  allocator_push(allocator_t *alloc);
+void  allocator_pop();
+char *allocator_alloc(size_t size);
+char *allocator_realloc(char *ptr, size_t old_size, size_t new_size);
+void  allocator_free(char *ptr);
+
+typedef struct _arena arena_t;
+struct _arena {
+    arena_t *prev;
+    arena_t *next;
+    char    *buffer;
+    size_t   len;
+    size_t   capacity;
+};
+
+typedef struct _slab_allocator {
+    ALLOCATOR_VTABLE;
+    size_t   arena_capacity;
+    arena_t  head;
+    arena_t *tail;
+    struct {
+        arena_t *arena;
+        size_t   pos;
+    } mark;
+} slab_allocator_t;
+
+#ifndef SLAB_CAPACITY
+#define SLAB_CAPACITY 8 * 1024 * 1024
+#endif /* SLAB_CAPACITY */
+
+slab_allocator_t *slab_allocator_init(size_t arena_capacity);
+void              slab_allocator_checkpoint(slab_allocator_t *alloc);
+void              slab_allocator_rewind(slab_allocator_t *alloc);
+void             *slab_allocator_alloc(allocator_t *a, size_t size);
+void              slab_allocator_destroy(allocator_t *a);
 
 #define OPT(T) opt_##T
 #define OPTDEF(T)                  \
@@ -155,6 +219,7 @@ extern nodeptr nullptr;
 #warning "Can't compile elrond with C++ yet"
 #endif
 #define nodeptr_ptr(v) ((nodeptr) { .ok = true, .value = (v) })
+#define nodeptr_offset(p, offset) ((p.ok) ? (nodeptr) { .ok = true, .value = (p.value + (offset)) } : (nodeptr) { 0 })
 
 typedef struct slice {
     char  *items;
@@ -174,6 +239,7 @@ typedef struct array {
 #define slice_is_cstr(s) ((s).items[(s).len] == '\0')
 #define SL "%.*s"
 #define SLARG(s) (int) (s).len, (s).items
+#define slice_foreach(T, it, slice) for (T *it = (slice)->items; it < (slice)->items + (slice)->len; ++it)
 
 #define slice_fwrite(s, f)                    \
     do {                                      \
@@ -184,6 +250,8 @@ typedef struct array {
         }                                     \
     } while (0)
 
+intptr_t   align_at(intptr_t alignment, intptr_t value);
+intptr_t   words_needed(intptr_t word_size, intptr_t bytes);
 slice_t    slice_head(slice_t slice, size_t from_back);
 slice_t    slice_first(slice_t slice, size_t num);
 slice_t    slice_tail(slice_t slice, size_t from_start);
@@ -206,12 +274,193 @@ slice_t    slice_ltrim(slice_t s);
 opt_ulong  slice_to_ulong(slice_t s, unsigned int base);
 opt_long   slice_to_long(slice_t s, unsigned int base);
 
+#ifndef TEMP_CAPACITY
+#define TEMP_CAPACITY SLAB_CAPACITY
+#endif /* TEMP_CAPACITY */
+void        temp_reset(void);
+size_t      temp_save(void);
+void        temp_rewind(size_t checkpoint);
+char       *temp_strdup(char const *cstr);
+void       *temp_alloc(size_t size);
+char       *temp_sprintf(char const *format, ...) __attribute__((__format__(printf, 1, 2)));
+char const *temp_slice_to_cstr(slice_t slice);
+
 #endif /* __SLICE_H__ */
 
 #ifdef SLICE_IMPLEMENTATION
 #undef SLICE_IMPLEMENTATION
 #ifndef SLICE_IMPLEMENTED
 #define SLICE_IMPLEMENTED
+
+static size_t temp_size = 0;
+static char   temp_buffer[TEMP_CAPACITY] = { 0 };
+
+intptr_t align_at(intptr_t alignment, intptr_t bytes)
+{
+    assert(alignment > 0 && (alignment & (alignment - 1)) == 0); // Align must be power of 2
+    return (bytes + (alignment - 1)) & ~(alignment - 1);
+}
+
+intptr_t words_needed(intptr_t word_size, intptr_t bytes)
+{
+    size_t ret = bytes / word_size;
+    return (bytes % word_size != 0) ? ret + 1 : ret;
+}
+
+void *stdc_alloc(allocator_t *alloc, size_t size)
+{
+    (void) alloc;
+    void *ret = calloc(size, 1);
+    return ret;
+}
+
+void *stdc_realloc(allocator_t *alloc, void *ptr, size_t old_size, size_t new_size)
+{
+    (void) alloc;
+    void *ret = realloc(ptr, new_size);
+    memset(ret + old_size, 0, new_size - old_size);
+    return ret;
+}
+
+void stdc_free(allocator_t *alloc, void *ptr)
+{
+    (void) alloc;
+    free(ptr);
+}
+
+void allocator_push(allocator_t *alloc)
+{
+    alloc->prev_allocator = current_allocator;
+    current_allocator = alloc;
+}
+
+void allocator_pop()
+{
+    assert(current_allocator->prev_allocator != NULL);
+    allocator_t *alloc = current_allocator;
+    current_allocator = alloc->prev_allocator;
+    alloc->prev_allocator = NULL;
+    if (alloc->destroy) {
+        alloc->destroy(alloc);
+    }
+}
+
+char *allocator_alloc(size_t size)
+{
+    assert(current_allocator != NULL);
+    char *ret = (char *) current_allocator->alloc(current_allocator, size);
+    if (ret == NULL) {
+        fatal("Allocator exhausted");
+    }
+    return ret;
+}
+
+char *allocator_realloc(char *ptr, size_t old_size, size_t new_size)
+{
+    assert(current_allocator != NULL);
+    assert((ptr == NULL && old_size == 0) || (ptr != NULL && old_size != 0));
+    if (new_size <= old_size) {
+        return ptr;
+    }
+    char *ret = NULL;
+    if (current_allocator->realloc != NULL) {
+        ret = (char *) current_allocator->realloc(current_allocator, ptr, old_size, new_size);
+    } else {
+        ret = (char *) current_allocator->alloc(current_allocator, new_size);
+        if (ret != NULL && old_size > 0) {
+            memcpy(ret, ptr, old_size);
+        }
+        allocator_free(ptr);
+    }
+    if (ret == NULL) {
+        fatal("Allocator exhausted");
+    }
+    return ret;
+}
+
+void allocator_free(char *ptr)
+{
+    assert(current_allocator != NULL);
+    if (current_allocator->free != NULL) {
+        current_allocator->free(current_allocator, ptr);
+    }
+}
+
+slab_allocator_t *slab_allocator_init(size_t arena_capacity)
+{
+    if (arena_capacity == 0) {
+        arena_capacity = 8 * 1024;
+    }
+    assert(arena_capacity > (size_t) align_at(8, sizeof(slab_allocator_t)));
+    char *buffer = (char *) calloc(arena_capacity, 1);
+    if (buffer == NULL) {
+        fatal("Allocator exhausted");
+    }
+    slab_allocator_t *alloc = (slab_allocator_t *) buffer;
+    alloc->alloc = slab_allocator_alloc;
+    alloc->destroy = slab_allocator_destroy;
+    alloc->prev_allocator = current_allocator;
+    alloc->head.capacity = arena_capacity;
+    alloc->head.buffer = buffer;
+    alloc->head.len = align_at(8, sizeof(slab_allocator_t));
+    alloc->tail = &alloc->head;
+    current_allocator = (allocator_t *) alloc;
+    return alloc;
+}
+
+void slab_allocator_checkpoint(slab_allocator_t *alloc)
+{
+    alloc->mark.arena = alloc->tail;
+    alloc->mark.pos = alloc->tail->len;
+}
+
+void slab_allocator_rewind(slab_allocator_t *alloc)
+{
+    assert(alloc->mark.arena != NULL);
+    alloc->mark.arena->len = alloc->mark.pos;
+    for (arena_t *arena = alloc->mark.arena->next; arena != NULL; arena = arena->next) {
+        alloc->mark.arena->len = align_at(8, sizeof(arena_t));
+    }
+    alloc->mark.arena = NULL;
+    alloc->mark.pos = 0;
+}
+
+void slab_allocator_destroy(allocator_t *a)
+{
+    slab_allocator_t *alloc = (slab_allocator_t *) a;
+    arena_t          *n = NULL;
+    for (arena_t *arena = &alloc->head; arena != NULL; arena = n) {
+        n = arena->next;
+        free(arena->buffer);
+    }
+}
+
+void *slab_allocator_alloc(allocator_t *a, size_t size)
+{
+    slab_allocator_t *alloc = (slab_allocator_t *) a;
+    for (arena_t *arena = &alloc->head; arena != NULL; arena = arena->next) {
+        if (arena->len + size <= arena->capacity) {
+            void *ret = arena->buffer + arena->len;
+            arena->len += align_at(8, size);
+            return ret;
+        }
+    }
+    size_t cap = MAX(alloc->arena_capacity, size + align_at(8, sizeof(arena_t)));
+    char  *buffer = (char *) calloc(cap, 1);
+    if (buffer == NULL) {
+        return NULL;
+    }
+    arena_t *arena = (arena_t *) buffer;
+    arena->buffer = buffer;
+    arena->capacity = cap;
+    arena->len = align_at(8, sizeof(arena_t));
+    arena->prev = alloc->tail;
+    alloc->tail->next = arena;
+    alloc->tail = arena;
+    void *ret = arena->buffer + arena->len;
+    arena->len += align_at(8, size);
+    return ret;
+}
 
 slice_t slice_head(slice_t slice, size_t from_back)
 {
@@ -285,7 +534,7 @@ opt_size_t slice_find(slice_t haystack, slice_t needle)
     if (haystack.len < needle.len) {
         return OPTNULL(size_t);
     }
-    for (size_t i = 0; i < haystack.len - needle.len; ++i) {
+    for (size_t i = 0; i <= haystack.len - needle.len; ++i) {
         if (strncmp(haystack.items + i, needle.items, needle.len) == 0) {
             return OPTVAL(size_t, i);
         }
@@ -488,6 +737,69 @@ opt_long slice_to_long(slice_t s, unsigned int base)
     return OPTVAL(long, ((long) (~val.value + 1)));
 }
 
+char *temp_strdup(char const *cstr)
+{
+    size_t n = strlen(cstr);
+    char  *result = (char *) temp_alloc(n + 1);
+    assert(result != NULL && "Increase TEMP_CAPACITY");
+    memcpy(result, cstr, n);
+    result[n] = '\0';
+    return result;
+}
+
+void *temp_alloc(size_t requested_size)
+{
+    size_t word_size = sizeof(uintptr_t);
+    size_t size = (requested_size + word_size - 1) / word_size * word_size;
+    if (temp_size + size > TEMP_CAPACITY)
+        return NULL;
+    void *result = &temp_buffer[temp_size];
+    temp_size += size;
+    return result;
+}
+
+char *temp_sprintf(char const *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    int n = vsnprintf(NULL, 0, format, args);
+    va_end(args);
+
+    assert(n >= 0);
+    char *result = (char *) temp_alloc(n + 1);
+    assert(result != NULL && "Extend the size of the temporary allocator");
+    // TODO: use proper arenas for the temporary allocator;
+    va_start(args, format);
+    vsnprintf(result, n + 1, format, args);
+    va_end(args);
+
+    return result;
+}
+
+void temp_reset(void)
+{
+    temp_size = 0;
+}
+
+size_t temp_save(void)
+{
+    return temp_size;
+}
+
+void temp_rewind(size_t checkpoint)
+{
+    temp_size = checkpoint;
+}
+
+char const *temp_slice_to_cstr(slice_t slice)
+{
+    char *result = (char *) temp_alloc(slice.len + 1);
+    assert(result != NULL && "Extend the size of the temporary allocator");
+    memcpy(result, slice.items, slice.len);
+    result[slice.len] = '\0';
+    return result;
+}
+
 #endif /* SLICE_IMPLEMENTED */
 #endif /* SLICE_IMPLEMENTATION */
 
@@ -513,6 +825,7 @@ int main()
     assert(slice_eq(slice_ltrim(tabs), C("Hello \t ")));
     assert(slice_eq(slice_rtrim(tabs), C(" \t Hello")));
     assert(slice_eq(slice_trim(tabs), s));
+    assert(slice_find(s, C("lo")).ok);
 }
 
 #endif /* SLICE_TEST */

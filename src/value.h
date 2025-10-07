@@ -52,7 +52,7 @@ opt_value_t make_value_from_signed(nodeptr type, int64_t v);
 opt_value_t make_value_from_unsigned(nodeptr type, uint64_t v);
 opt_value_t make_value_from_double(nodeptr type, double d);
 value_t     make_value_from_buffer(nodeptr type, void *buf);
-void        value_print(FILE *f, value_t value);
+void        value_print(sb_t *sb, value_t value);
 opt_value_t value_coerce(value_t value, nodeptr type);
 opt_value_t evaluate(value_t v1, operator_t op, value_t v2);
 

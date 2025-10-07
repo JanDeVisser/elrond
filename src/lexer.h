@@ -533,7 +533,7 @@ opt_scanresult_t linecomment(void *ctx, slice_t buffer)
     size_t ix = config->marker.len;
     for (; ix < buffer.len && buffer.items[ix] != '\n'; ++ix)
         ;
-#ifdef COMMENUM_IGNORE
+#ifdef COMMENT_IGNORE
     return OPTVAL(scanresult_t, make_skip_result(0, ix));
 #else
     return OPTVAL(scanresult_t, make_token_result(token_make_comment(CT_Line, true), ix));
@@ -545,7 +545,7 @@ opt_scanresult_t block_comment_line(blockcomment_t *config, slice_t buffer)
     opt_size_t end_maybe = slice_find(buffer, config->end);
     opt_size_t nl_maybe = slice_indexof(buffer, '\n');
     if (nl_maybe.ok && (!end_maybe.ok || end_maybe.value > nl_maybe.value)) {
-#ifdef COMMENUM_IGNORE
+#ifdef COMMENT_IGNORE
         return OPTVAL(scanresult_t, make_skip_result(0, nl_maybe.value + 1));
 #else
         return OPTVAL(scanresult_t, make_token_result(token_make_comment(CT_Block, false), nl_maybe.value + 1));
@@ -553,13 +553,13 @@ opt_scanresult_t block_comment_line(blockcomment_t *config, slice_t buffer)
     }
     config->in_comment = false;
     if (end_maybe.ok) {
-#ifdef COMMENUM_IGNORE
+#ifdef COMMENT_IGNORE
         return OPTVAL(scanresult_t, make_skip_result(0, end_maybe.value + config->end.len));
 #else
         return OPTVAL(scanresult_t, make_token_result(token_make_comment(CT_Block, true), end_maybe.value + config->end.len));
 #endif
     }
-#ifdef COMMENUM_IGNORE
+#ifdef COMMENT_IGNORE
     return OPTVAL(scanresult_t, make_skip_result(0, buffer.len));
 #else
     return OPTVAL(scanresult_t, make_token_result(token_make_comment(CT_Block, true), buffer.len));
@@ -763,6 +763,7 @@ slice_t lexer_token_text(lexer_t *lexer, token_t token)
 void lexer_push_source(lexer_t *lexer, slice_t src, scanner_def_t scanner)
 {
     lexer->buffer = src;
+    dynarr_clear(&lexer->tokens);
     size_t          index = 0;
     tokenlocation_t loc = { 0 };
     while (src.len > 0) {
@@ -773,6 +774,7 @@ void lexer_push_source(lexer_t *lexer, slice_t src, scanner_def_t scanner)
         switch (ret.result) {
         case SRT_Token: {
             ret.token.location = loc;
+            // trace("%s", tokenkind_name(ret.token.kind));
             dynarr_append(&(lexer->tokens), ret.token);
         } break;
         default:

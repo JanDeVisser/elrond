@@ -46,20 +46,20 @@ OPTDEF(nodeptrs);
         generic_da_ensure(GENDA(arr), (mincap)); \
     } while (0)
 
-#define dynarr_copy(A, T, arr)                                        \
-    (                                                                 \
-        {                                                             \
-            A __copy = {                                              \
-                .items = calloc((arr).capacity, sizeof(T)),           \
-                .len = (arr).len,                                     \
-                .capacity = (arr).capacity,                           \
-            };                                                        \
-            if (__copy.items == NULL) {                               \
-                fprintf(stderr, "Out of memory.\n");                  \
-                abort();                                              \
-            }                                                         \
-            memcpy(__copy.items, (arr).items, sizeof(T) * (arr).len); \
-            __copy;                                                   \
+#define dynarr_copy(A, T, arr)                                              \
+    (                                                                       \
+        {                                                                   \
+            A __copy = {                                                    \
+                .items = (T *) allocator_alloc((arr).capacity * sizeof(T)), \
+                .len = (arr).len,                                           \
+                .capacity = (arr).capacity,                                 \
+            };                                                              \
+            if (__copy.items == NULL) {                                     \
+                fprintf(stderr, "Out of memory.\n");                        \
+                abort();                                                    \
+            }                                                               \
+            memcpy(__copy.items, (arr).items, sizeof(T) * (arr).len);       \
+            __copy;                                                         \
         })
 
 #define dynarr_clear(arr) generic_da_clear(GENDA(arr))
@@ -109,6 +109,7 @@ OPTDEF(nodeptrs);
 
 #define dynarr_eq(arr1, arr2) (dynarr_cmp((arr1), (arr2)) == 0)
 #define dynarr_as_slice(arr) (slice_make((arr).items, (arr).len))
+#define dynarr_foreach(T, it, arr) slice_foreach(T, it, arr)
 
 #define sb_as_slice(sb) dynarr_as_slice(sb)
 #define sb_clear(sb) dynarr_clear((sb))
@@ -154,24 +155,21 @@ int    generic_da_cmp(generic_da_t *da1, generic_da_t *da2, size_t elem_size);
 
 void generic_da_ensure(generic_da_t *arr, size_t elem_size, size_t mincap)
 {
-    if (arr->capacity < mincap) {
-        size_t cap = (arr->capacity > 0) ? arr->capacity : 4;
-        while (cap < mincap) {
-            cap *= 1.6;
-        }
-        void *newitems = malloc(cap * elem_size);
-        memset(newitems, 0, cap * elem_size);
-        if (newitems == NULL) {
-            fprintf(stderr, "Out of memory.\n");
-            abort();
-        }
-        if (arr->items) {
-            memcpy(newitems, arr->items, elem_size * arr->len);
-            free(arr->items);
-        }
-        arr->items = newitems;
-        arr->capacity = cap;
+    if (arr->capacity >= mincap) {
+        return;
     }
+    // trace("da_ensure(%zu,%zu,%zu,%zu)", arr->len, elem_size, arr->capacity, mincap);
+    size_t cap = (arr->capacity > 0) ? arr->capacity : 16;
+    while (cap < mincap) {
+        cap *= 1.6;
+    }
+    void *newitems = allocator_realloc(arr->items, arr->capacity * elem_size, cap * elem_size);
+    if (newitems == NULL) {
+        fprintf(stderr, "Out of memory.\n");
+        abort();
+    }
+    arr->items = newitems;
+    arr->capacity = cap;
 }
 
 size_t generic_da_append(generic_da_t *arr, size_t elem_size, void *elem)
@@ -191,7 +189,7 @@ void generic_da_clear(generic_da_t *arr, size_t elem_size)
 void generic_da_free(generic_da_t *arr, size_t elem_size)
 {
     (void) elem_size;
-    free(arr->items);
+    allocator_free(arr->items);
     arr->len = 0;
     arr->items = NULL;
     arr->capacity = 0;
@@ -323,6 +321,13 @@ int main()
     sb_t sb = { 0 };
     sb_printf(&sb, "Hello, %s\n", "World");
     assert(strncmp(sb.items, "Hello, World\n", strlen("Hello, World\n")) == 0);
+    sb_printf(&sb, "Hello, World\n");
+    assert(strncmp(sb.items, "Hello, World\nHello, World\n", 2 * strlen("Hello, World\n")) == 0);
+    for (size_t ix = 0; ix < 100; ++ix) {
+        sb_printf(&sb, "Hello, World\n");
+        assert(sb.len == (ix + 3) * strlen("Hello, World\n"));
+        assert(strncmp(sb.items, "Hello, World\nHello, World\n", 2 * strlen("Hello, World\n")) == 0);
+    }
     return 0;
 }
 

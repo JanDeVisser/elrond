@@ -9,6 +9,7 @@
 
 #include "da.h"
 #include "elrondlexer.h"
+#include "lexer.h"
 #include "node.h"
 #include "operators.h"
 #include "parser.h"
@@ -154,15 +155,13 @@ bool _parser_check_node(parser_t *parser, tokenlocation_t location, nodeptr n, c
     return n.ok;
 }
 
-node_t *parser_node(parser_t *parser, nodeptr n)
+node_t *_parser_node(parser_t *parser, nodeptr n, char const *file, int line)
 {
     if (!n.ok) {
-        fprintf(stderr, "null node dereferenced\n");
-        abort();
+        fatal_file_line(file, line, "null node dereferenced");
     }
     if (n.value >= parser->nodes.len) {
-        fprintf(stderr, "node pointer `%zu` out of range 0..`%zu`\n", n.value, parser->nodes.len);
-        abort();
+        fatal_file_line(file, line, "node pointer `%zu` out of range 0..`%zu`", n.value, parser->nodes.len);
     }
     return parser->nodes.items + n.value;
 }
@@ -171,7 +170,7 @@ nodeptr parser_append_node(parser_t *this, node_t n)
 {
     n.ix = this->nodes.len;
     dynarr_append(&this->nodes, n);
-    // printf("%zu %s\n", this->nodes.len - 1, node_type_name(n.node_type));
+    trace("creating node %zu %s", this->nodes.len - 1, node_type_name(n.node_type));
     return nodeptr_ptr(this->nodes.len - 1);
 }
 
@@ -345,11 +344,13 @@ nodeptr parse_statement(parser_t *this)
         if (raw.terminated) {
             return parser_add_node(
                 this,
-                NT_Insert,
+                NT_Comptime,
                 tokenlocation_merge(t.location, parser_current_location(this)),
-                .raw_text = parser_text(this, t));
+                .comptime = {
+                    .raw_text = slice_head(slice_tail(parser_text(this, t), strlen("@comptime")), strlen("@end")),
+                });
         } else {
-            parser_error(this, t.location, "Unclosed `@insert` block");
+            parser_error(this, t.location, "Unclosed `@comptime` block");
             return nullptr;
         }
     }
@@ -1170,24 +1171,69 @@ nodeptr parse_yield_statement(parser_t *this)
         .yield_statement = { .label = label, .statement = stmt });
 }
 
+rawscanner_t comptime_raw = {
+    .begin = C("@comptime"),
+    .end = C("@end"),
+};
+
+scanner_def_t elrond_scanner_pack_def[] = {
+    { .scanner = scannerpack, .ctx = (void *) &c_style_comments },
+    { .scanner = numberscanner, .ctx = NULL },
+    { .scanner = stringscanner, .ctx = (void *) &single_double_quotes },
+    { .scanner = whitespacescanner, .ctx = (void *) true },
+    { .scanner = identifierscanner, .ctx = NULL },
+    { .scanner = keywordscanner, .ctx = NULL },
+    { .scanner = rawscanner, .ctx = (void *) &comptime_raw },
+    { .scanner = symbolmuncher, .ctx = NULL },
+};
+
+scannerpack_t elrond_scanner_pack = {
+    .scanners = elrond_scanner_pack_def,
+};
+
+scanner_def_t elrond_scanner = {
+    .scanner = scannerpack,
+    .ctx = (void *) &elrond_scanner_pack,
+};
+
 parser_t parse(slice_t name, slice_t text)
 {
     parser_t parser = { 0 };
-    lexer_push_source(&parser.lexer, text, c_scanner);
-    nodeptrs block = { 0 };
-    token_t  t = parse_statements(&parser, &block, parse_module_level_statement);
     parser.root = parser_add_node(
         &parser,
         NT_Program,
-        t.location,
+        (tokenlocation_t) { 0 },
         .program = { .name = name, .statements = { 0 } });
-    nodeptr mod = parser_add_node(
-        &parser,
+    parse_module(&parser, name, text);
+    return parser;
+}
+
+nodeptr parse_module(parser_t *parser, slice_t name, slice_t text)
+{
+    lexer_push_source(&parser->lexer, text, elrond_scanner);
+    nodeptrs block = { 0 };
+    token_t  t = parse_statements(parser, &block, parse_module_level_statement);
+    nodeptr  mod = parser_add_node(
+        parser,
         NT_Module,
         t.location,
         .module = { .name = name, .statements = block });
-    dynarr_append(&parser_node(&parser, parser.root)->program.modules, mod);
-    return parser;
+    dynarr_append(&parser_node(parser, parser->root)->program.modules, mod);
+    return nodeptr_ptr(parser->nodes.len - 1);
+}
+
+nodeptr parse_snippet(parser_t *parser, slice_t text)
+{
+    lexer_push_source(&parser->lexer, text, elrond_scanner);
+    nodeptrs block = { 0 };
+    token_t  t = parse_statements(parser, &block, parse_statement);
+    nodeptr  stmt_block = parser_add_node(
+        parser,
+        NT_StatementBlock,
+        t.location,
+        .statement_block = { .statements = block });
+    dynarr_append(&parser_node(parser, parser->root)->program.modules, stmt_block);
+    return nodeptr_ptr(parser->nodes.len - 1);
 }
 
 void parser_print(parser_t *parser)
@@ -1232,14 +1278,14 @@ void parser_names_dump(parser_t *parser)
 
 opt_name_t parser_resolve(parser_t *parser, slice_t name)
 {
-    printf("parser_resolve(" SL ")\n", SLARG(name));
-    parser_names_dump(parser);
+    trace("parser_resolve(" SL ")\n", SLARG(name));
+    // parser_names_dump(parser);
     for (int ix = parser->namespaces.len - 1; ix >= 0; --ix) {
         namespace_t *ns = &N(parser->namespaces.items[ix])->namespace.value;
         for (size_t iix = 0; iix < ns->len; ++iix) {
             name_t entry = ns->items[iix];
             if (slice_eq(entry.name, name)) {
-                printf("parser_resolve(" SL ") found %zu " SL " " SL,
+                trace("parser_resolve(" SL ") found %zu " SL " " SL,
                     SLARG(name),
                     entry.type.value,
                     SLARG(type_kind_name(entry.type)),
@@ -1263,7 +1309,7 @@ void parser_add_name(parser_t *parser, slice_t name, nodeptr type, nodeptr decl)
             return;
         }
     }
-    printf("parser_add_name(" SL ", " SL " " SL ")\n", SLARG(name), SLARG(type_kind_name(type)), SLARG(type_to_string(type)));
+    trace("parser_add_name(" SL ", " SL " " SL ")\n", SLARG(name), SLARG(type_kind_name(type)), SLARG(type_to_string(type)));
     dynarr_append_s(name_t, ns, .name = name, .type = type, .declaration = decl);
-    parser_names_dump(parser);
+    // parser_names_dump(parser);
 }

@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "interpreter.h"
+#include "ir.h"
 #include "node.h"
 #include "operators.h"
 #include "parser.h"
@@ -15,14 +17,14 @@
 #include "type.h"
 #include "value.h"
 
-#define normalize(parser, n)                                      \
-    (                                                             \
-        {                                                         \
-            nodeptr __normalized = node_normalize((parser), (n)); \
-            if (!__normalized.ok) {                               \
-                return nullptr;                                   \
-            }                                                     \
-            (__normalized);                                       \
+#define normalize(parser, n)                                    \
+    (                                                           \
+        {                                                       \
+            nodeptr normalized = node_normalize((parser), (n)); \
+            if (!normalized.ok) {                               \
+                return nullptr;                                 \
+            }                                                   \
+            normalized;                                         \
         })
 
 typedef nodeptr (*normalize_fnc)(parser_t *, nodeptr n);
@@ -50,59 +52,103 @@ void flatten_binex(parser_t *parser, nodeptr root, nodeptrs *list)
 
 nodeptr BinaryExpression_normalize(parser_t *parser, nodeptr n)
 {
-    nodeptr        lhs = normalize(parser, N(n)->binary_expression.lhs);
-    nodeptr        rhs = normalize(parser, N(n)->binary_expression.rhs);
-    operator_t     op = N(n)->binary_expression.op;
+    node_t        *node = N(n);
+    nodeptr        lhs = normalize(parser, node->binary_expression.lhs);
+    nodeptr        rhs = normalize(parser, node->binary_expression.rhs);
+    operator_t     op = node->binary_expression.op;
     operator_def_t op_def = operators[op];
 
-    node_t *expr = N(n);
     node_t *lhs_node = N(lhs);
     node_t *rhs_node = N(rhs);
 
     if (op_def.assignment_op_for.ok) {
         node_t  lhs_node_copy = *lhs_node;
-        nodeptr bin_expr = parser_add_node(parser, NT_BinaryExpression, expr->location, .binary_expression = { .lhs = lhs, .op = op_def.assignment_op_for.value, .rhs = rhs });
+        nodeptr bin_expr = parser_add_node(
+            parser,
+            NT_BinaryExpression,
+            node->location,
+            .binary_expression = {
+                .lhs = lhs,
+                .op = op_def.assignment_op_for.value,
+                .rhs = rhs,
+            });
         nodeptr lhs_copy = parser_append_node(parser, lhs_node_copy);
-        return parser_add_node(parser, NT_BinaryExpression, expr->location, .binary_expression = { .lhs = lhs_copy, .op = OP_AddressOf, .rhs = bin_expr });
+        return parser_add_node(
+            parser,
+            NT_BinaryExpression,
+            node->location,
+            .binary_expression = {
+                .lhs = lhs_copy,
+                .op = OP_Assign,
+                .rhs = bin_expr,
+            });
     }
     if (lhs_node->node_type == NT_Constant && rhs_node->node_type == NT_Constant) {
-        opt_value_t result = evaluate(lhs_node->constant_value.value, op, rhs_node->constant_value.value);
+        opt_value_t result = evaluate(
+            lhs_node->constant_value.value,
+            op,
+            rhs_node->constant_value.value);
         if (result.ok) {
-            return parser_add_node(parser, NT_Constant, expr->location, .constant_value = result);
+            return parser_add_node(
+                parser,
+                NT_Constant,
+                node->location,
+                .constant_value = result);
         }
     }
-    if (lhs_node->node_type == NT_Constant && op == OP_Cast && rhs_node->node_type == NT_TypeSpecification) {
+    if (lhs_node->node_type == NT_Constant
+        && op == OP_Cast && rhs_node->node_type == NT_TypeSpecification) {
         nodeptr type = typespec_resolve(rhs_node->type_specification);
         if (type.ok) {
             opt_value_t result = value_coerce(lhs_node->constant_value.value, type);
             if (result.ok) {
-                return parser_add_node(parser, NT_Constant, expr->location, .constant_value = result);
+                return parser_add_node(
+                    parser,
+                    NT_Constant, node->location,
+                    .constant_value = result);
             }
         }
     }
     if (op == OP_Call) {
         switch (rhs_node->node_type) {
         case NT_Void: {
-            rhs = parser_add_node(parser, NT_ExpressionList, rhs_node->location, .expression_list = { 0 });
+            rhs = parser_add_node(
+                parser,
+                NT_ExpressionList,
+                rhs_node->location,
+                .expression_list = { 0 });
         } break;
         case NT_ExpressionList:
             break;
         default: {
             nodeptrs arg_list = { 0 };
             dynarr_append(&arg_list, rhs);
-            rhs = parser_add_node(parser, NT_ExpressionList, rhs_node->location, .expression_list = arg_list);
+            rhs = parser_add_node(
+                parser,
+                NT_ExpressionList,
+                rhs_node->location,
+                .expression_list = arg_list);
             break;
         }
         }
-        return parser_add_node(parser, NT_Call, expr->location, .function_call = { .callable = lhs, .arguments = rhs });
+        return parser_add_node(
+            parser,
+            NT_Call,
+            node->location,
+            .function_call = { .callable = lhs, .arguments = rhs });
     }
     if (op == OP_Sequence) {
         nodeptrs expressions = { 0 };
         flatten_binex(parser, n, &expressions);
-        return parser_add_node(parser, NT_ExpressionList, rhs_node->location, .expression_list = expressions);
+        return parser_add_node(
+            parser,
+            NT_ExpressionList,
+            rhs_node->location,
+            .expression_list = expressions);
     }
 
-    if (lhs.value != N(n)->binary_expression.lhs.value || rhs.value != N(n)->binary_expression.rhs.value) {
+    if (lhs.value != N(n)->binary_expression.lhs.value
+        || rhs.value != N(n)->binary_expression.rhs.value) {
         return parser_add_node(
             parser,
             NT_BinaryExpression,
@@ -118,17 +164,28 @@ nodeptr BoolConstant_normalize(parser_t *parser, nodeptr n)
     return parser_add_node(parser, NT_Constant, N(n)->location, .constant_value = OPTVAL(value_t, val));
 }
 
+nodeptr Comptime_normalize(parser_t *parser, nodeptr n)
+{
+    nodeptr stmts = parse_snippet(parser, N(n)->comptime.raw_text);
+    stmts = normalize(parser, stmts);
+    N(n)->comptime.statements = stmts;
+    return n;
+}
+
 nodeptr Function_normalize(parser_t *parser, nodeptr n)
 {
-    nodeptr impl = normalize(parser, N(n)->function.implementation);
-    nodeptr sig = normalize(parser, N(n)->function.signature);
-    if (N(n)->function.implementation.value != impl.value || N(n)->function.signature.value != sig.value) {
+    node_t *node = N(n);
+    nodeptr impl = normalize(parser, node->function.implementation);
+    node = N(n);
+    nodeptr sig = normalize(parser, node->function.signature);
+    if (node->function.implementation.value != impl.value
+        || node->function.signature.value != sig.value) {
         n = parser_add_node(
             parser,
             NT_Function,
-            N(n)->location,
+            node->location,
             .function = {
-                .name = N(n)->function.name,
+                .name = node->function.name,
                 .implementation = impl,
                 .signature = sig,
             });
@@ -138,16 +195,16 @@ nodeptr Function_normalize(parser_t *parser, nodeptr n)
 
 opt_nodeptrs normalize_block(parser_t *parser, nodeptr n, off_t offset)
 {
-    nodeptrs new_block = { 0 };
-    size_t   sz = ((nodeptrs *) ((void *) N(n) + offset))->len;
-    for (size_t ix = 0; ix < sz; ++ix) {
-        nodeptr s = ((nodeptrs *) ((void *) N(n) + offset))->items[ix];
-        nodeptr normalized = node_normalize(parser, s);
+    node_t   *node = N(n);
+    nodeptrs *block = (nodeptrs *) ((void *) node + offset);
+    nodeptrs  new_block = { 0 };
+    for (size_t ix = 0; ix < block->len; ++ix) {
+        nodeptr normalized = node_normalize(parser, block->items[ix]);
         if (normalized.ok) {
             dynarr_append(&new_block, normalized);
         }
     }
-    if (!dynarr_eq(new_block, *((nodeptrs *) ((void *) N(n) + offset)))) {
+    if (!dynarr_eq(new_block, *block)) {
         return OPTVAL(nodeptrs, new_block);
     }
     return OPTNULL(nodeptrs);
@@ -240,6 +297,7 @@ nodeptr String_normalize(parser_t *parser, nodeptr n)
 #define NORMALIZEOVERRIDES(S) \
     S(BinaryExpression)       \
     S(BoolConstant)           \
+    S(Comptime)               \
     S(Function)               \
     S(Module)                 \
     S(Number)                 \

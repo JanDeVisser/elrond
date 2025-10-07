@@ -742,8 +742,10 @@ void arm64_function_generate(arm64_function_t *f, ir_generator_t *gen, operation
 
     for (size_t ix = 0; ix < operations->len; ++ix) {
         operation_t *op = operations->items + ix;
-        printf("Serializing op #%zu   ", ix);
-        operation_list(stdout, op);
+        trace("Serializing op #%zu", ix);
+        sb_t list = { 0 };
+        operation_list(&list, op);
+        trace(SL, SLARG(list));
         switch (op->type) {
 #undef S
 #define S(T, P)              \

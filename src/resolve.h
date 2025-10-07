@@ -82,7 +82,7 @@ path_t platform_image(slice_t image)
 static lib_handle_result_t library_try_open(library_t *lib, path_t dir)
 {
     slice_t path_string = { 0 };
-    if (lib->image.len == 0) {
+    if (lib->image.len != 0 && dir.path.items != NULL) {
         path_t path = path_append(dir, platform_image(lib->image));
         path_string = sb_as_slice(path.path);
     }
@@ -92,7 +92,8 @@ static lib_handle_result_t library_try_open(library_t *lib, path_t dir)
         dlerror();
         return RESVAL(lib_handle_result_t, lib_handle);
     }
-    return RESERR(lib_handle_result_t, (dl_error_t) { .message = C(dlerror()) });
+    char const *dlerr = dlerror();
+    return RESERR(lib_handle_result_t, (dl_error_t) { .message = C(dlerr) });
 }
 
 static lib_handle_result_t library_open(library_t *lib)
@@ -177,15 +178,22 @@ function_result_t library_get_function(library_t *lib, slice_t function_name)
         }
     }
     dlerror();
-    assert(function_name.items[function_name.len] == 0);
-    void_t function = dlsym(lib->handle.success, function_name.items);
+    size_t      cp = temp_save();
+    char const *fnc = function_name.items;
+    if (fnc[function_name.len] != 0) {
+
+        fnc = temp_slice_to_cstr(function_name);
+    }
+    void_t function = dlsym(lib->handle.success, fnc);
+    temp_rewind(cp);
     if (function == NULL) {
         // 'undefined symbol' is returned with an empty result pointer
-        slice_t err = C(dlerror());
+        char   *dl_error = dlerror();
+        slice_t err = (dl_error != NULL) ? C(dl_error) : C("");
 #ifdef __APPLE__
-        if (!slice_find(err, C("symbol not found")).ok) {
+        if (err.len > 0 && !slice_find(err, C("symbol not found")).ok) {
 #else
-        if (!slice_find(err, C("undefined symbol")).ok) {
+        if (err.len > 0 && !slice_find(err, C("undefined symbol")).ok) {
 #endif
             return RESERR(function_result_t, (dl_error_t) { .message = err });
         }
@@ -247,6 +255,7 @@ function_result_t resolve_function(slice_t func_name)
 
     resolve_t *resolve = get_resolver();
     nodeptr    p = resolve_open(lib_name);
+    assert(p.ok);
     library_t *lib = resolve->items + p.value;
     if (!lib->handle.ok) {
         return RESERR(function_result_t, lib->handle.error);
@@ -268,7 +277,8 @@ resolve_t *get_resolver()
 
 int main()
 {
-    return 0;
+    function_result_t res = resolve_function(C("libelrrt:elrond$putln"));
+    assert(res.ok && res.success != NULL);
 }
 
 #endif
