@@ -164,8 +164,9 @@ nodeptr BinaryExpression_bind(parser_t *parser, nodeptr n)
     operator_t      op = N(n)->binary_expression.op;
     nodeptr         lhs = N(n)->binary_expression.lhs;
     nodeptr         rhs = N(n)->binary_expression.rhs;
-    nodeptr         lhs_type = bind(parser, N(n)->binary_expression.lhs);
-    nodeptr         lhs_value_type = node_value_type(N(n)->binary_expression.lhs);
+    nodeptr         lhs_type = bind(parser, lhs);
+    assert(lhs_type.ok && N(lhs)->bound_type.ok && (lhs_type.value == N(lhs)->bound_type.value));
+    nodeptr lhs_value_type = type_value_type(lhs_type);
 
     if (op == OP_MemberAccess) {
         if (type_kind(lhs_type) != TYPK_ReferenceType) {
@@ -203,8 +204,8 @@ nodeptr BinaryExpression_bind(parser_t *parser, nodeptr n)
                 "Unknown field `" SL "`", SLARG(id));
         }
     }
-    bind(parser, rhs);
-    nodeptr rhs_value_type = node_value_type(rhs);
+    nodeptr rhs_type = bind(parser, rhs);
+    nodeptr rhs_value_type = type_value_type(rhs_type);
 
     if (op == OP_Assign) {
         if (type_kind(lhs_type) != TYPK_ReferenceType) {
@@ -512,7 +513,7 @@ nodeptr node_bind(parser_t *parser, nodeptr ix)
     }
     node_t *node = N(ix);
     if (node->bound_type.ok) {
-        return ix;
+        return node->bound_type;
     }
     trace("bind %zu = %s", ix.value, node_type_name(node->node_type));
     if (node->namespace.ok) {

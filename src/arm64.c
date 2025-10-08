@@ -12,6 +12,7 @@
 
 #include "arm64.h"
 #include "cmdline.h"
+#include "config.h"
 #include "da.h"
 #include "fs.h"
 #include "ir.h"
@@ -742,10 +743,9 @@ void arm64_function_generate(arm64_function_t *f, ir_generator_t *gen, operation
 
     for (size_t ix = 0; ix < operations->len; ++ix) {
         operation_t *op = operations->items + ix;
-        trace("Serializing op #%zu", ix);
-        sb_t list = { 0 };
+        sb_t         list = { 0 };
         operation_list(&list, op);
-        trace(SL, SLARG(list));
+        trace("Serializing op #%zu " SL, ix, SLARG(list));
         switch (op->type) {
 #undef S
 #define S(T, P)              \
@@ -902,11 +902,9 @@ bool arm64_save_and_assemble(arm64_object_t *o, ir_generator_t *gen)
     process_t        as = process_create("as", path.path.items, "-o", o_file.path.items);
     process_result_t res = process_execute(&as);
     if (!res.ok) {
-        fprintf(stderr, "Assembler execution failed: %s\n", strerror(errno));
-        abort();
+        fatal("Assembler execution failed: %s\n", strerror(errno));
     } else if (res.success != 0) {
-        fprintf(stderr, "Assembler failed:\n" SL, SLARG(as.out_pipes.pipes[1].text));
-        abort();
+        fatal("Assembler failed:\n" SL, SLARG(as.out_pipes.pipes[1].text));
     }
     //    if (!cmdline_is_set("keep-assembly")) {
     //        unlink(path.path.items);
@@ -942,7 +940,6 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
             }
             path_t path = path_extend(dot_elrond, obj->file_name);
             path_replace_extension(&path, C("o"));
-            ;
             dynarr_append(&o_files, sb_as_slice(path.path))
         }
     }
@@ -951,11 +948,9 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
         process_t        p = process_create("xcrun", "--sdk", "macosx", "--show-sdk-path");
         process_result_t res = process_execute(&p);
         if (!res.ok) {
-            fprintf(stderr, "`xcrun` execution failed: %s\n", strerror(errno));
-            abort();
+            fatal("`xcrun` execution failed: %s\n", strerror(errno));
         } else if (res.success != 0) {
-            fprintf(stderr, "xcrun failed:\n" SL, SLARG(p.out_pipes.pipes[1].text));
-            abort();
+            fatal("xcrun failed:\n" SL, SLARG(p.out_pipes.pipes[1].text));
         }
         sb_t sdk_path = p.out_pipes.pipes[0].text;
         sdk_path.len = slice_rtrim(sb_as_slice(sdk_path)).len;
@@ -965,18 +960,18 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
         printf("[ARM64] Linking `" SL "`\n", SLARG(program_path.path));
         printf("[ARM64] SDK path: `" SL "`\n", SLARG(sdk_path));
 
-        // sb_t      lib_dir = sb_format("-Lbuild");
         process_t link = process_create(
             "ld",
             "-o",
             program_path.path.items,
-            "-L"
-            "build", // lib_dir.items,
+            "-L" ELROND_DIR "build",
             "-L",
             sdk_path.items,
             "-lelrstart",
             "-lelrrt",
             "-lSystem",
+            "-rpath",
+            ELROND_DIR "build",
             "-e",
             "_start",
             "-arch",
@@ -988,16 +983,26 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
 
         res = process_execute(&link);
         if (!res.ok) {
-            fprintf(stderr, "Linker execution failed: %s\n", strerror(errno));
-            abort();
+            fatal("Linker execution failed: %s\n", strerror(errno));
         } else if (res.success != 0) {
-            fprintf(stderr, "Linking failed:\n" SL, SLARG(link.out_pipes.pipes[1].text));
-            abort();
+            fatal("Linking failed:\n" SL, SLARG(link.out_pipes.pipes[1].text));
         }
         if (!cmdline_is_set("keep-objects")) {
             for (size_t ix = 0; ix < o_files.len; ++ix) {
                 unlink(o_files.items[ix].items);
             }
+        }
+        process_t install_tool = process_create(
+            "install_name_tool",
+            "-change",
+            "build/libelrrt.dylib",
+            "@executable_path/libelrrt.dylib",
+            program_path.path.items);
+        res = process_execute(&install_tool);
+        if (!res.ok) {
+            fatal("Install tool execution failed: %s\n", strerror(errno));
+        } else if (res.success != 0) {
+            fatal("Install tool failed:\n" SL, SLARG(link.out_pipes.pipes[1].text));
         }
     }
     return true;
@@ -1005,6 +1010,7 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
 
 opt_arm64_executable_t arm64_generate(ir_generator_t *gen, nodeptr program)
 {
+    assert(gen->ir_nodes.items[program.value].type == IRN_Program);
     arm64_executable_t exe = {
         .program = program,
         .objects = { 0 },

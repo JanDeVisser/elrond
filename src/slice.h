@@ -25,6 +25,8 @@
 #define MAX(a, b) ((a > b) ? (a) : (b))
 #define ALIGNAT(bytes, align) ((bytes + (align - 1)) & ~(align - 1))
 
+extern bool do_trace;
+
 #define _fatal(file, line, prefix, msg, ...)    \
     do {                                        \
         fprintf(stderr, "%s:%d: ", file, line); \
@@ -43,11 +45,13 @@
 #ifdef NDEBUG
 #define trace(msg, ...)
 #else
-#define trace(msg, ...)                                 \
-    do {                                                \
-        fprintf(stderr, "%s:%d: ", __FILE__, __LINE__); \
-        fprintf(stderr, msg, ##__VA_ARGS__);            \
-        fputc('\n', stderr);                            \
+#define trace(msg, ...)                                     \
+    do {                                                    \
+        if (do_trace) {                                     \
+            fprintf(stderr, "%s:%d: ", __FILE__, __LINE__); \
+            fprintf(stderr, msg, ##__VA_ARGS__);            \
+            fputc('\n', stderr);                            \
+        }                                                   \
     } while (0)
 #endif
 
@@ -292,6 +296,7 @@ char const *temp_slice_to_cstr(slice_t slice);
 #ifndef SLICE_IMPLEMENTED
 #define SLICE_IMPLEMENTED
 
+bool          do_trace = false;
 static size_t temp_size = 0;
 static char   temp_buffer[TEMP_CAPACITY] = { 0 };
 
@@ -747,12 +752,14 @@ char *temp_strdup(char const *cstr)
     return result;
 }
 
+#define WORD_SIZE sizeof(uintptr_t)
+
 void *temp_alloc(size_t requested_size)
 {
-    size_t word_size = sizeof(uintptr_t);
-    size_t size = (requested_size + word_size - 1) / word_size * word_size;
-    if (temp_size + size > TEMP_CAPACITY)
+    size_t size = align_at(WORD_SIZE, requested_size);
+    if (temp_size + size > TEMP_CAPACITY) {
         return NULL;
+    }
     void *result = &temp_buffer[temp_size];
     temp_size += size;
     return result;

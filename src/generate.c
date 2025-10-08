@@ -502,9 +502,11 @@ void generate_Return(ir_generator_t *gen, nodeptr n)
         bool          done = false;
         switch (ctx->unwind_type) {
         case USET_Block: {
-            if (ctx->block.defer_stmts.len != 0) {
-                if (scope_end == 0) {
+            if (scope_end == 0) {
+                if (ctx->block.defer_stmts.len != 0) {
                     scope_end = ctx->block.defer_stmts.items[ctx->block.defer_stmts.len - 1].label;
+                } else {
+                    scope_end = ctx->block.scope_end_label;
                 }
                 ++depth;
             }

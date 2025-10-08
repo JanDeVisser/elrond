@@ -9,6 +9,7 @@ Nob_Cmd cmd = { 0 };
 #define BUILD_DIR "build/"
 #define SRC_DIR "src/"
 #define RT_DIR "rt/arch/Darwin/arm64/"
+#define TEST_DIR "test/"
 
 #define STB_HEADERS(S)  \
     S(slice, SLICE)     \
@@ -22,6 +23,7 @@ Nob_Cmd cmd = { 0 };
 
 #define APP_HEADERS(S) \
     S(arm64)           \
+    S(config)          \
     S(elrondlexer)     \
     S(ir)              \
     S(native)          \
@@ -58,6 +60,10 @@ Nob_Cmd cmd = { 0 };
     S(strlen)         \
     S(to_string)
 
+#define TEST_SOURCES(S) \
+    S(01_helloworld)    \
+    S(02_comptime)
+
 int format_sources()
 {
     cmd_append(&cmd, "clang-format", "-i", "bld.c");
@@ -91,7 +97,6 @@ int format_sources()
 
 int main(int argc, char **argv)
 {
-    chdir("/Users/jan/projects/elrond");
     NOB_GO_REBUILD_URSELF(argc, argv);
 
     bool        rebuild = false;
@@ -109,7 +114,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[ix], "--norun") == 0) {
             run = false;
         }
-        if (strcmp(argv[ix], "--format") == 0) {
+        if (strcmp(argv[ix], "format") == 0) {
             format = true;
         }
     }
@@ -180,6 +185,10 @@ int main(int argc, char **argv)
         if (!cmd_run(&cmd)) {
             return 1;
         }
+        cmd_append(&cmd, "install_name_tool", "-id", "@rpath/libelrrt.dylib", BUILD_DIR "libelrrt.dylib");
+        if (!cmd_run(&cmd)) {
+            return 1;
+        }
     }
 
     bool headers_updated = rebuild;
@@ -228,10 +237,19 @@ int main(int argc, char **argv)
     }
 
     if (run) {
-        cmd_append(&cmd, BUILD_DIR "elrond", script);
-        if (!cmd_run(&cmd)) {
-            return 1;
-        }
+        nob_set_current_dir(TEST_DIR);
+        putenv("DYLD_LIBRARY_PATH=../" BUILD_DIR);
+#undef S
+#define S(T)                                               \
+    cmd_append(&cmd, "../" BUILD_DIR "elrond", #T ".elr"); \
+    if (!cmd_run(&cmd)) {                                  \
+        return 1;                                          \
+    }                                                      \
+    cmd_append(&cmd, "./" #T);                             \
+    if (!cmd_run(&cmd)) {                                  \
+        return 1;                                          \
+    }
+        TEST_SOURCES(S)
     }
 
     return 0;

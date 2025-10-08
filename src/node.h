@@ -283,12 +283,4 @@ nodeptr     node_normalize(struct _parser *parser, nodeptr ix);
 nodeptr     node_bind(struct _parser *parser, nodeptr ix);
 node_t     *node_relocate(struct _parser *parser, node_t *node, ssize_t offset);
 
-#define node_value_type(node)                    \
-    (                                            \
-        {                                        \
-            nodeptr __v = N((node))->bound_type; \
-            assert(__v.ok);                      \
-            type_value_type(__v);                \
-        });
-
 #endif /* __NODE_H__ */

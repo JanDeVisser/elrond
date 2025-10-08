@@ -227,7 +227,9 @@ void interpreter_execute_operations(interpreter_t *interpreter, nodeptr ir)
     default:
         UNREACHABLE();
     }
-    list(stderr, interpreter->gen, ir);
+    if (do_trace) {
+        list(stderr, interpreter->gen, ir);
+    }
     assert(ops != NULL);
     bool must_analyze = true;
     for (size_t ix = 0; ix < interpreter->labels.len; ++ix) {

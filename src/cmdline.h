@@ -117,10 +117,7 @@ static void help(cmdline_t *cmdline)
         fprintf(stderr, "\n");
     }
     fprintf(stderr,
-        "\t--help\tThis message\n"
-        "\t--debug, -d\tLog debug messages for the given comma-separated modules\n"
-        "\t--loglevel, -v\tLog level (ERROR, WARN, INFO, DEBUG)\n"
-        "\t--logfile\tLog file\n\n");
+        "\t--help\tThis message\n\n");
     exit(1);
 }
 

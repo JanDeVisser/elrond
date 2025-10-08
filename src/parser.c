@@ -1278,7 +1278,7 @@ void parser_names_dump(parser_t *parser)
 
 opt_name_t parser_resolve(parser_t *parser, slice_t name)
 {
-    trace("parser_resolve(" SL ")\n", SLARG(name));
+    trace("parser_resolve(" SL ")", SLARG(name));
     // parser_names_dump(parser);
     for (int ix = parser->namespaces.len - 1; ix >= 0; --ix) {
         namespace_t *ns = &N(parser->namespaces.items[ix])->namespace.value;
@@ -1309,7 +1309,7 @@ void parser_add_name(parser_t *parser, slice_t name, nodeptr type, nodeptr decl)
             return;
         }
     }
-    trace("parser_add_name(" SL ", " SL " " SL ")\n", SLARG(name), SLARG(type_kind_name(type)), SLARG(type_to_string(type)));
+    trace("parser_add_name(" SL ", " SL " " SL ")", SLARG(name), SLARG(type_kind_name(type)), SLARG(type_to_string(type)));
     dynarr_append_s(name_t, ns, .name = name, .type = type, .declaration = decl);
     // parser_names_dump(parser);
 }

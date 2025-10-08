@@ -11,6 +11,7 @@
 #define RESOLVE_IMPLEMENTATION
 #endif
 
+#include "config.h"
 #include "da.h"
 #include "fs.h"
 #include "slice.h"
@@ -18,7 +19,7 @@
 #ifndef __RESOLVE_H__
 #define __RESOLVE_H__
 
-#define ELROND_DIR "ELROND_DIR"
+#define ENVVAR_ELROND_DIR "ELROND_DIR"
 #define ELROND_INIT "_elrond_init"
 
 typedef void (*void_t)();
@@ -100,13 +101,16 @@ static lib_handle_result_t library_open(library_t *lib)
 {
     lib_handle_result_t ret = RESERR(lib_handle_result_t, (dl_error_t) { 0 });
     if (lib->image.len != 0) {
-        path_t elrond_dir = path_parse(getenv(ELROND_DIR) ? C(getenv(ELROND_DIR)) : C("/Users/jan/projects/elrond/build"));
+        path_t elrond_dir = path_parse(getenv(ENVVAR_ELROND_DIR) ? C(getenv(ENVVAR_ELROND_DIR)) : C(ELROND_DIR));
         if (elrond_dir.path.len == 0) {
-            elrond_dir = path_parse(C("/usr/share/arwen"));
+            elrond_dir = path_parse(C("/usr/share/elrond"));
         }
         ret = library_try_open(lib, path_extend(path_copy(elrond_dir), C("lib")));
         if (!ret.ok) {
             ret = library_try_open(lib, path_extend(path_copy(elrond_dir), C("bin")));
+        }
+        if (!ret.ok) {
+            ret = library_try_open(lib, path_extend(path_copy(elrond_dir), C("build")));
         }
         if (!ret.ok) {
             ret = library_try_open(lib, elrond_dir);

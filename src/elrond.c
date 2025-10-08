@@ -28,6 +28,8 @@
 #include "parser.h"
 #include "type.h"
 
+bool do_list = false;
+
 opt_sb_t get_command_string()
 {
     printf("*> ");
@@ -45,8 +47,10 @@ opt_sb_t get_command_string()
 void report(char const *hdr, parser_t *parser)
 {
     static int stage = 1;
-    printf("\nStage %d: %s\n", stage, hdr);
-    printf("------------------------\n");
+    if (do_list || do_trace) {
+        printf("\nStage %d: %s\n", stage, hdr);
+        printf("------------------------\n");
+    }
     if (parser->errors.len > 0) {
         for (size_t ix = 0; ix < parser->errors.len; ++ix) {
             slice_t msg = sb_as_slice(parser->errors.items[ix]);
@@ -54,7 +58,9 @@ void report(char const *hdr, parser_t *parser)
         }
         exit(1);
     }
-    parser_print(parser);
+    if (do_list || do_trace) {
+        parser_print(parser);
+    }
     ++stage;
 }
 
@@ -68,7 +74,23 @@ static app_description_t app_descr = {
         {
             .longopt = "keep-assembly",
             .description = "Do not remove intermediate assembler files",
-            .value_required = true,
+            .value_required = false,
+            .cardinality = COC_Set,
+            .type = COT_Boolean,
+        },
+        {
+            .longopt = "list",
+            .option = 'l',
+            .description = "Display intermediate listings",
+            .value_required = false,
+            .cardinality = COC_Set,
+            .type = COT_Boolean,
+        },
+        {
+            .longopt = "trace",
+            .option = 't',
+            .description = "Emit tracing/debug output",
+            .value_required = false,
             .cardinality = COC_Set,
             .type = COT_Boolean,
         },
@@ -78,6 +100,8 @@ static app_description_t app_descr = {
 int main(int argc, char const **argv)
 {
     parse_cmdline_args(&app_descr, argc, argv);
+    do_trace = cmdline_is_set("trace");
+    do_list = cmdline_is_set("list");
     slices_t args = cmdline_arguments();
     assert(args.len > 0);
     slice_t  file_name = C(args.items[0].items);
@@ -102,7 +126,9 @@ int main(int argc, char const **argv)
     report("Binding", &parser);
 
     ir_generator_t gen = generate_ir(&parser, parser.root);
-    list(stdout, &gen, nodeptr_ptr(0));
+    if (do_trace) {
+        list(stdout, &gen, nodeptr_ptr(0));
+    }
     arm64_generate(&gen, nodeptr_ptr(0));
     return 0;
 }
