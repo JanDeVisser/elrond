@@ -1,0 +1,11 @@
+func putln(s: string) void -> "elrond$putln"
+func puts(s: string) void -> "elrond$puts"
+func puti(i: i32) void -> "elrond$puti"
+func endln() void -> "elrond$endln"
+
+func main() i32
+{
+	puti(2::i32+2::i32);
+	endln();
+	return 0::i32
+}

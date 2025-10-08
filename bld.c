@@ -62,7 +62,8 @@ Nob_Cmd cmd = { 0 };
 
 #define TEST_SOURCES(S) \
     S(01_helloworld)    \
-    S(02_comptime)
+    S(02_comptime)      \
+    S(03_binexp)
 
 int format_sources()
 {

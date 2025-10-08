@@ -1,6 +1,7 @@
 .align 4
 
 .global elrond$endln
+.global _elrond$endln
 
 //
 // endln - Prints a newline character
@@ -14,6 +15,7 @@
 //   x16 - syscall
 
 elrond$endln:
+_elrond$endln:
     stp     fp,lr,[sp,#-16]!
     mov     fp,sp
 
