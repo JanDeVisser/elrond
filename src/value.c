@@ -544,9 +544,26 @@ opt_value_t evaluate_Cast(value_t v1, value_t v2)
 
 opt_value_t evaluate_Divide(value_t v1, value_t v2)
 {
-    (void) v1;
-    (void) v2;
-    return OPTNULL(value_t);
+    type_t *t1 = get_type(v1.type);
+    switch (t1->kind) {
+    case TYPK_IntType:
+        if (t1->int_type.is_signed) {
+            int64_t i1 = UNWRAP(long, value_as_signed(v1));
+            int64_t i2 = TRYOPT_ADAPT(long, value_as_signed(v2), OPTNULL(value_t));
+            return make_value_from_signed(v1.type, i1 / i2);
+        } else {
+            uint64_t i1 = UNWRAP(long, value_as_signed(v1));
+            uint64_t i2 = TRYOPT_ADAPT(ulong, value_as_unsigned(v2), OPTNULL(value_t));
+            return make_value_from_unsigned(v1.type, i1 / i2);
+        }
+    case TYPK_FloatType: {
+        double d1 = UNWRAP(double, value_as_double(v1));
+        double d2 = TRYOPT_ADAPT(double, value_as_double(v2), OPTNULL(value_t));
+        return make_value_from_double(v1.type, d1 / d2);
+    }
+    default:
+        return OPTNULL(value_t);
+    }
 }
 
 opt_value_t evaluate_Equals(value_t v1, value_t v2)
@@ -635,9 +652,26 @@ opt_value_t evaluate_Modulo(value_t v1, value_t v2)
 
 opt_value_t evaluate_Multiply(value_t v1, value_t v2)
 {
-    (void) v1;
-    (void) v2;
-    return OPTNULL(value_t);
+    type_t *t1 = get_type(v1.type);
+    switch (t1->kind) {
+    case TYPK_IntType:
+        if (t1->int_type.is_signed) {
+            int64_t i1 = UNWRAP(long, value_as_signed(v1));
+            int64_t i2 = TRYOPT_ADAPT(long, value_as_signed(v2), OPTNULL(value_t));
+            return make_value_from_signed(v1.type, i1 * i2);
+        } else {
+            uint64_t i1 = UNWRAP(long, value_as_signed(v1));
+            uint64_t i2 = TRYOPT_ADAPT(ulong, value_as_unsigned(v2), OPTNULL(value_t));
+            return make_value_from_unsigned(v1.type, i1 * i2);
+        }
+    case TYPK_FloatType: {
+        double d1 = UNWRAP(double, value_as_double(v1));
+        double d2 = TRYOPT_ADAPT(double, value_as_double(v2), OPTNULL(value_t));
+        return make_value_from_double(v1.type, d1 * d2);
+    }
+    default:
+        return OPTNULL(value_t);
+    }
 }
 
 opt_value_t evaluate_Negate(value_t v1, value_t v2)
@@ -705,14 +739,31 @@ opt_value_t evaluate_SubscriptClose(value_t v1, value_t v2)
 
 opt_value_t evaluate_Subtract(value_t v1, value_t v2)
 {
-    (void) v1;
-    (void) v2;
-    return OPTNULL(value_t);
-};
+    type_t *t1 = get_type(v1.type);
+    switch (t1->kind) {
+    case TYPK_IntType:
+        if (t1->int_type.is_signed) {
+            int64_t i1 = UNWRAP(long, value_as_signed(v1));
+            int64_t i2 = TRYOPT_ADAPT(long, value_as_signed(v2), OPTNULL(value_t));
+            return make_value_from_signed(v1.type, i1 - i2);
+        } else {
+            uint64_t i1 = UNWRAP(long, value_as_signed(v1));
+            uint64_t i2 = TRYOPT_ADAPT(ulong, value_as_unsigned(v2), OPTNULL(value_t));
+            return make_value_from_unsigned(v1.type, i1 - i2);
+        }
+    case TYPK_FloatType: {
+        double d1 = UNWRAP(double, value_as_double(v1));
+        double d2 = TRYOPT_ADAPT(double, value_as_double(v2), OPTNULL(value_t));
+        return make_value_from_double(v1.type, d1 - d2);
+    }
+    default:
+        return OPTNULL(value_t);
+    }
+}
 
 opt_value_t evaluate_MAX(value_t v1, value_t v2)
 {
     (void) v1;
     (void) v2;
     return OPTNULL(value_t);
-};
+}

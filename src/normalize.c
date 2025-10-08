@@ -79,6 +79,20 @@ nodeptr BinaryExpression_normalize(parser_t *parser, nodeptr n)
                 .rhs = bin_expr,
             });
     }
+    if (N(lhs)->node_type == NT_Constant
+        && op == OP_Cast
+        && N(rhs)->node_type == NT_TypeSpecification) {
+        nodeptr type = typespec_resolve(N(rhs)->type_specification);
+        if (type.ok) {
+            opt_value_t result = value_coerce(N(lhs)->constant_value.value, type);
+            if (result.ok) {
+                return parser_add_node(
+                    parser,
+                    NT_Constant, location,
+                    .constant_value = result);
+            }
+        }
+    }
     if (N(lhs)->node_type == NT_Constant && N(rhs)->node_type == NT_Constant) {
         opt_value_t result = evaluate(
             N(lhs)->constant_value.value,
@@ -90,19 +104,6 @@ nodeptr BinaryExpression_normalize(parser_t *parser, nodeptr n)
                 NT_Constant,
                 location,
                 .constant_value = result);
-        }
-    }
-    if (N(lhs)->node_type == NT_Constant
-        && op == OP_Cast && N(rhs)->node_type == NT_TypeSpecification) {
-        nodeptr type = typespec_resolve(N(rhs)->type_specification);
-        if (type.ok) {
-            opt_value_t result = value_coerce(N(lhs)->constant_value.value, type);
-            if (result.ok) {
-                return parser_add_node(
-                    parser,
-                    NT_Constant, location,
-                    .constant_value = result);
-            }
         }
     }
     if (op == OP_Call) {

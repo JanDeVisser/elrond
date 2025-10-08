@@ -776,10 +776,13 @@ void type_registry_init()
 
 #define GETTYPE(p) (type_registry.items + (p).value)
 
-type_t *get_type(nodeptr p)
+type_t *get_type_file_line(nodeptr p, char const *file, int line)
 {
     if (type_registry.len == 0) {
         type_registry_init();
+    }
+    if (!p.ok || p.value >= type_registry.len) {
+        fatal_file_line(file, line, "Invalid type pointer");
     }
     assert(p.ok && p.value < type_registry.len);
     type_t *t = GETTYPE(p);
@@ -792,19 +795,17 @@ type_t *get_type(nodeptr p)
 nodeptr find_type(slice_t name)
 {
     trace("find_type(" SL ")", SLARG(name));
-    while (true) {
-        for (size_t ix = 0; ix < type_by_name.len; ++ix) {
-            if (slice_eq(name, type_by_name.items[ix].name)) {
-                nodeptr type = type_by_name.items[ix].type;
-                assert(type.ok && type.value < type_registry.len);
-                type_t *t = GETTYPE(type);
-                while (t->kind == TYPK_AliasType) {
-                    type = t->alias_of;
-                    t = GETTYPE(type);
-                }
-                trace("find_type: found %zu", type.value);
-                return type;
+    for (size_t ix = 0; ix < type_by_name.len; ++ix) {
+        if (slice_eq(name, type_by_name.items[ix].name)) {
+            nodeptr type = type_by_name.items[ix].type;
+            assert(type.ok && type.value < type_registry.len);
+            type_t *t = GETTYPE(type);
+            while (t->kind == TYPK_AliasType) {
+                type = t->alias_of;
+                t = GETTYPE(type);
             }
+            trace("find_type: found %zu", type.value);
+            return type;
         }
     }
     return nullptr;

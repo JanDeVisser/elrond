@@ -199,11 +199,12 @@ nodeptr  result_of(nodeptr success, nodeptr failure);
 nodeptr  signature(nodeptrs parameters, nodeptr result);
 nodeptr  typelist_of(nodeptrs types);
 nodeptr  struct_of(struct_fields_t fields);
-type_t  *get_type(nodeptr p);
+type_t  *get_type_file_line(nodeptr p, char const *file, int line);
 nodeptr  find_type(slice_t name);
 void     type_registry_init();
 
-#define type_kind(type) (get_type((type))->kind)
+#define get_type(type) (get_type_file_line(type, __FILE__, __LINE__))
+#define type_kind(type) (get_type_file_line((type), __FILE__, __LINE__)->kind)
 #define type_is_int(type) (type_kind((type)) == TYPK_IntType)
 #define type_is_number(type)                                \
     (                                                       \

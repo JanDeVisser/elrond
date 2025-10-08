@@ -5,7 +5,11 @@ func endln() void -> "elrond$endln"
 
 func main() i32
 {
-	puti(2::i32+2::i32);
-	endln();
+	puti(2::i32+3::i32)
+	endln()
+	puti(2::i32+3::i32*6::i32)
+	endln()
+	puti((2::i32+3::i32)*6::i32)
+	endln()
 	return 0::i32
 }
