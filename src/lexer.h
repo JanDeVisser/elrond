@@ -207,6 +207,7 @@ extern linecomment_t   hashmark;
 extern blockcomment_t  c_block_comment;
 extern stringscanner_t default_quotes;
 extern stringscanner_t single_double_quotes;
+extern stringscanner_t double_quotes;
 extern scannerpack_t   c_style_comments;
 extern scannerpack_t   c_scanner_pack;
 extern scanner_def_t   c_scanner;
@@ -330,6 +331,10 @@ stringscanner_t default_quotes = (stringscanner_t) {
 
 stringscanner_t single_double_quotes = (stringscanner_t) {
     .quotes = C("\"'"),
+};
+
+stringscanner_t double_quotes = (stringscanner_t) {
+    .quotes = C("\""),
 };
 
 slice_t no_keywords[] = {

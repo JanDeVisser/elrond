@@ -19,7 +19,8 @@ Nob_Cmd cmd = { 0 };
     S(cmdline, CMDLINE) \
     S(fs, FS)           \
     S(process, PROCESS) \
-    S(resolve, RESOLVE)
+    S(resolve, RESOLVE) \
+    S(json, JSON)
 
 #define APP_HEADERS(S) \
     S(arm64)           \

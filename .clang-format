@@ -2,6 +2,7 @@
 AlignConsecutiveDeclarations: Consecutive
 Language: Cpp
 BasedOnStyle: WebKit
+UseTab: Never
 SpaceAfterTemplateKeyword: false
 AlignEscapedNewlines: Left
 AlignTrailingComments: true

@@ -238,6 +238,12 @@ sb_t *sb_unescape(sb_t *sb, slice_t escaped)
         int ch = escaped.items[ix];
         if (prev_was_backslash) {
             switch (ch) {
+            case 'b':
+                sb_append_char(sb, '\b');
+                break;
+            case 'f':
+                sb_append_char(sb, '\f');
+                break;
             case 'n':
                 sb_append_char(sb, '\n');
                 break;
@@ -265,12 +271,18 @@ sb_t *sb_unescape(sb_t *sb, slice_t escaped)
 
 sb_t *sb_escape(sb_t *sb, slice_t slice)
 {
-    if (!slice_first_of(slice, C("\\\n\t\r")).ok) {
+    if (!slice_first_of(slice, C("\"\\\b\f\n\t\r")).ok) {
         return sb_append(sb, slice);
     }
     for (size_t ix = 0; ix < slice.len; ++ix) {
         int ch = slice.items[ix];
         switch (ch) {
+        case '\b':
+            sb_append_cstr(sb, "\\b");
+            break;
+        case '\f':
+            sb_append_cstr(sb, "\\f");
+            break;
         case '\n':
             sb_append_cstr(sb, "\\n");
             break;
@@ -282,6 +294,9 @@ sb_t *sb_escape(sb_t *sb, slice_t slice)
             break;
         case '\\':
             sb_append_cstr(sb, "\\\\");
+            break;
+        case '"':
+            sb_append_cstr(sb, "\\\"");
             break;
         default:
             sb_append_char(sb, ch);
