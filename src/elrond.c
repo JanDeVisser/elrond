@@ -94,6 +94,14 @@ static app_description_t app_descr = {
             .cardinality = COC_Set,
             .type = COT_Boolean,
         },
+        {
+            .longopt = "verbose",
+            .option = 'v',
+            .description = "Verbose compiler outout",
+            .value_required = false,
+            .cardinality = COC_Set,
+            .type = COT_Boolean,
+        },
         { 0 } }
 };
 

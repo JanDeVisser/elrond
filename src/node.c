@@ -239,6 +239,22 @@ void String_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
     sb_printf(sb, SL "\n", SLARG(n->string.string));
 }
 
+void VariableDeclaration_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
+{
+    (void) indent;
+    if (n->variable_declaration.is_const) {
+        sb_append_cstr(sb, "const ");
+    }
+    sb_printf(sb, SL, SLARG(n->variable_declaration.name));
+    if (n->variable_declaration.type.ok) {
+        sb_printf(sb, ": " SL, SLARG(typespec_to_string(tree, n->variable_declaration.type)));
+    }
+    sb_append_char(sb, '\n');
+    if (n->variable_declaration.initializer.ok) {
+        node_to_string(sb, "Init", tree, n->variable_declaration.initializer, indent + 4);
+    }
+}
+
 #define PRINTOVERRIDES(S) \
     S(BinaryExpression)   \
     S(BoolConstant)       \
@@ -262,7 +278,8 @@ void String_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
     S(Identifier)         \
     S(Signature)          \
     S(StatementBlock)     \
-    S(String)
+    S(String)             \
+    S(VariableDeclaration)
 
 typedef void (*print_fnc)(sb_t *, nodes_t, node_t *, int);
 

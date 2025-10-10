@@ -16,6 +16,8 @@
 #include "slice.h"
 #include "type.h"
 
+OPTDEF(nodeptr);
+
 bool               _parser_check_token(parser_t *parser, opt_token_t t, char const *fmt, ...);
 bool               _parser_check_node(parser_t *parser, tokenlocation_t location, nodeptr n, char const *fmt, ...);
 nodeptr            parse_primary(parser_t *this);
@@ -28,7 +30,7 @@ opt_operator_def_t check_op_by_position(parser_t *this, position_t pos);
 token_t            parse_statements(parser_t *this, nodeptrs *statements, nodeptr (*parser)(parser_t *));
 nodeptr            parse_statement(parser_t *this);
 nodeptr            parse_module_level_statement(parser_t *this);
-nodeptr            parse_type(parser_t *this);
+opt_nodeptr        parse_type(parser_t *this);
 nodeptr            parse_preprocess(parser_t *this, nodetype_t node_type);
 nodeptr            parse_break_continue(parser_t *this);
 nodeptr            parse_defer(parser_t *this);
@@ -41,7 +43,7 @@ nodeptr            parse_loop(parser_t *this);
 nodeptr            parse_public(parser_t *this);
 nodeptr            parse_return_error(parser_t *this);
 nodeptr            parse_struct(parser_t *this);
-nodeptr            parse_var_decl(parser_t *this);
+nodeptr            parse_var_decl(parser_t *this, slice_t name, nodeptr type);
 nodeptr            parse_while_statement(parser_t *this);
 nodeptr            parse_yield_statement(parser_t *this);
 
@@ -182,6 +184,7 @@ token_t parse_statements(parser_t *this, nodeptrs *statements, nodeptr (*parser)
             lexer_lex(&this->lexer);
             return t;
         }
+        this->ctx = (parser_ctx_t) { 0 };
         nodeptr stmt = parser(this);
         if (stmt.ok) {
             dynarr_append(statements, stmt);
@@ -196,10 +199,16 @@ nodeptr parse_module_level_statement(parser_t *this)
     case TK_EndOfFile:
         parser_error(this, t.location, "Unexpected end of file");
         return nullptr;
-    case TK_Identifier:
+    case TK_Identifier: {
         lexer_lex(&this->lexer);
         parser_expect_symbol(this, ':', "Expected variable declaration");
-        return parse_statement(this);
+        opt_nodeptr type_maybe = parse_type(this);
+        if (!type_maybe.ok) {
+            return nullptr;
+        }
+        parser_expect_symbol(this, '=', "Expected variable declaration");
+        return parse_var_decl(this, parser_text(this, t), type_maybe.value);
+    }
     case TK_Keyword: {
         switch (t.keyword) {
         case KW_Const:
@@ -238,19 +247,25 @@ nodeptr parse_statement(parser_t *this)
     case TK_EndOfFile:
         parser_error(this, t.location, "Unexpected end of file");
         return nullptr;
-    case TK_Identifier:
-        if (lexer_has_lookback(l, 2)
-            && token_matches_symbol(lexer_lookback(l, 2), ':')
-            && token_matches(lexer_lookback(l, 1), TK_Identifier)) {
-            // This is the type of a variable decl:
-            return parse_var_decl(this);
-        }
+    case TK_Identifier: {
+        slice_t id = parser_text(this, t);
         lexer_lex(l);
         if (lexer_accept_symbol(l, ':')) {
-            return parse_statement(this);
+            opt_nodeptr type_maybe = parse_type(this);
+            if (!type_maybe.ok) {
+                return nullptr;
+            }
+            token_t equals_maybe = lexer_peek(l);
+            if (type_maybe.value.ok || token_matches_symbol(equals_maybe, '=')) {
+                return parse_var_decl(this, id, type_maybe.value);
+            }
+            dynarr_append(&this->ctx.labels, id);
+            nodeptr ret = parse_statement(this);
+            return ret;
         }
         lexer_push_back(l);
         // Fall through
+    }
     case TK_Number:
     case TK_String:
         return parse_expression(this, 0);
@@ -261,7 +276,9 @@ nodeptr parse_statement(parser_t *this)
             return parse_break_continue(this);
         case KW_Const:
             lexer_lex(l);
+            this->ctx.is_const = true;
             return parse_statement(this);
+            this->ctx.is_const = false;
         case KW_Defer:
             return parse_defer(this);
         case KW_Embed:
@@ -319,14 +336,6 @@ nodeptr parse_statement(parser_t *this)
                     .statement_block = { .statements = block, .label = label });
             }
         }
-        case '=':
-            if (lexer_has_lookback(l, 2)
-                && token_matches_symbol(lexer_lookback(l, 1), ':')
-                && token_matches(lexer_lookback(l, 2), TK_Identifier)) {
-                // This is the '=' of a variable decl with implied type:
-                return parse_var_decl(this);
-            }
-            // Fall through
         default: {
             nodeptr expr = parse_expression(this, 0);
             if (expr.ok) {
@@ -439,11 +448,24 @@ nodeptr parse_primary(parser_t *this)
                 operator_def_t  operator= op_maybe.value;
                 binding_power_t bp = binding_power(operator);
                 lexer_lex(&this->lexer);
-                nodeptr operand = parser_check_node(
-                    this,
-                    token.location,
-                    ((operator.op == OP_Sizeof) ? parse_type(this) : parse_expression(this, bp.right)),
-                    "Expected operand following prefix1 operator");
+                nodeptr operand = { 0 };
+                if (operator.op == OP_Sizeof) {
+                    opt_nodeptr type_maybe = parse_type(this);
+                    if (!type_maybe.ok) {
+                        return nullptr;
+                    }
+                    operand = parser_check_node(
+                        this,
+                        token.location,
+                        type_maybe.value,
+                        "Expected type following `##` operator");
+                } else {
+                    operand = parser_check_node(
+                        this,
+                        token.location,
+                        parse_expression(this, bp.right),
+                        "Expected operand following prefix operator");
+                }
                 return parser_add_node(
                     this,
                     NT_UnaryExpression,
@@ -549,11 +571,24 @@ nodeptr parse_expression(parser_t *this, precedence_t min_prec)
                     .binary_expression = { .lhs = lhs, .op = OP_Call, .rhs = param_list });
             } else {
                 lexer_lex(&this->lexer);
-                nodeptr rhs = parser_check_node(
-                    this,
-                    parser_node(this, lhs)->location,
-                    ((operator.op == OP_Cast) ? parse_type(this) : parse_expression(this, bp.right)),
-                    "Expected right-hand expression");
+                nodeptr rhs = { 0 };
+                if (operator.op == OP_Cast) {
+                    opt_nodeptr type_maybe = parse_type(this);
+                    if (!type_maybe.ok) {
+                        return nullptr;
+                    }
+                    rhs = parser_check_node(
+                        this,
+                        parser_node(this, lhs)->location,
+                        type_maybe.value,
+                        "Expected type following `::` operator");
+                } else {
+                    rhs = parser_check_node(
+                        this,
+                        parser_node(this, lhs)->location,
+                        parse_expression(this, bp.right),
+                        "Expected right-hand expression");
+                }
                 lhs = parser_add_node(
                     this,
                     NT_BinaryExpression,
@@ -637,111 +672,136 @@ opt_operator_def_t check_op_by_position(parser_t *this, position_t pos)
     return OPTNULL(operator_def_t);
 }
 
-nodeptr parse_type(parser_t *this)
+opt_nodeptr parse_type(parser_t *this)
 {
     token_t t = lexer_peek(&this->lexer);
     if (lexer_accept_symbol(&this->lexer, '&')) {
-        nodeptr type = parse_type(this);
+        nodeptr type = TRYOPT(nodeptr, parse_type(this));
         if (!type.ok) {
-            return nullptr;
+            parser_error(this, t.location, "Expected type after `&`");
+            return OPTNULL(nodeptr);
         }
-        return parser_add_node(
-            this,
-            NT_TypeSpecification,
-            tokenlocation_merge(t.location, parser_location(this, type)),
-            .type_specification = { .kind = TYPN_Reference, .referencing = type });
-    }
-    if (lexer_accept_symbol(&this->lexer, '?')) {
-        nodeptr type = parse_type(this);
-        if (!type.ok) {
-            return nullptr;
-        }
-        return parser_add_node(
-            this,
-            NT_TypeSpecification,
-            tokenlocation_merge(t.location, parser_location(this, type)),
-            .type_specification = { .kind = TYPN_Optional, .optional_of = type });
-    }
-    if (lexer_accept_symbol(&this->lexer, '[')) {
-        if (lexer_accept_symbol(&this->lexer, ']')) {
-            nodeptr type = parse_type(this);
-            if (!type.ok) {
-                return nullptr;
-            }
-            return parser_add_node(
+        return OPTVAL(
+            nodeptr,
+            parser_add_node(
                 this,
                 NT_TypeSpecification,
                 tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYPN_Slice, .slice_of = type });
+                .type_specification = { .kind = TYPN_Reference, .referencing = type }));
+    }
+    if (lexer_accept_symbol(&this->lexer, '?')) {
+        nodeptr type = TRYOPT(nodeptr, parse_type(this));
+        if (!type.ok) {
+            parser_error(this, t.location, "Expected type after `?`");
+            return OPTNULL(nodeptr);
+        }
+        return OPTVAL(
+            nodeptr,
+            parser_add_node(
+                this,
+                NT_TypeSpecification,
+                tokenlocation_merge(t.location, parser_location(this, type)),
+                .type_specification = { .kind = TYPN_Optional, .optional_of = type }));
+    }
+    if (lexer_accept_symbol(&this->lexer, '[')) {
+        if (lexer_accept_symbol(&this->lexer, ']')) {
+            nodeptr type = TRYOPT(nodeptr, parse_type(this));
+            if (!type.ok) {
+                parser_error(this, t.location, "Expected type after `[]`");
+                return OPTNULL(nodeptr);
+            }
+            return OPTVAL(
+                nodeptr,
+                parser_add_node(
+                    this,
+                    NT_TypeSpecification,
+                    tokenlocation_merge(t.location, parser_location(this, type)),
+                    .type_specification = { .kind = TYPN_Slice, .slice_of = type }));
         }
         if (lexer_accept_symbol(&this->lexer, '0')) {
             lexerresult_t res = lexer_expect_symbol(&this->lexer, ']');
             if (!res.ok) {
                 parser_error(this, t.location, "Expected `]` to close `[0`");
-                return nullptr;
+                return OPTNULL(nodeptr);
             }
-            nodeptr type = parse_type(this);
+            nodeptr type = TRYOPT(nodeptr, parse_type(this));
             if (!type.ok) {
-                return nullptr;
+                parser_error(this, t.location, "Expected type after `[0]`");
+                return OPTNULL(nodeptr);
             }
-            return parser_add_node(
-                this,
-                NT_TypeSpecification,
-                tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYPN_ZeroTerminatedArray, .array_of = type });
+            return OPTVAL(
+                nodeptr,
+                parser_add_node(
+                    this,
+                    NT_TypeSpecification,
+                    tokenlocation_merge(t.location, parser_location(this, type)),
+                    .type_specification = { .kind = TYPN_ZeroTerminatedArray, .array_of = type }));
         }
         if (lexer_accept_symbol(&this->lexer, '*')) {
             lexerresult_t res = lexer_expect_symbol(&this->lexer, ']');
             if (!res.ok) {
                 parser_error(this, t.location, "Expected `]` to close `[*`");
-                return nullptr;
+                return OPTNULL(nodeptr);
             }
-            nodeptr type = parse_type(this);
+            nodeptr type = TRYOPT(nodeptr, parse_type(this));
             if (!type.ok) {
-                return nullptr;
+                parser_error(this, t.location, "Expected type after `[0]`");
+                return OPTNULL(nodeptr);
             }
-            return parser_add_node(
-                this,
-                NT_TypeSpecification,
-                tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYPN_DynArray, .array_of = type });
+            return OPTVAL(
+                nodeptr,
+                parser_add_node(
+                    this,
+                    NT_TypeSpecification,
+                    tokenlocation_merge(t.location, parser_location(this, type)),
+                    .type_specification = { .kind = TYPN_DynArray, .array_of = type }));
         }
         lexerresult_t res = lexer_expect(&this->lexer, TK_Number);
         if (!res.ok) {
             parser_error(this, t.location, "Expected array size, `0` or `]`");
-            return nullptr;
+            return OPTNULL(nodeptr);
         } else if (res.success.number == NUM_Decimal) {
             parser_error(this, res.success.location, "Array size must be integer");
-            return nullptr;
+            return OPTNULL(nodeptr);
         } else {
             token_t size_token = res.success;
             res = lexer_expect_symbol(&this->lexer, ']');
             if (!res.ok) {
                 parser_error(this, t.location, "Expected `]` to close array descriptor");
-                return nullptr;
+                return OPTNULL(nodeptr);
             }
             ulong   size = UNWRAP(ulong, slice_to_ulong(parser_text(this, size_token), 0));
-            nodeptr type = parse_type(this);
+            nodeptr type = TRYOPT(nodeptr, parse_type(this));
             if (!type.ok) {
-                return nullptr;
+                parser_error(this, t.location, "Expected type after `[%lu]`", size);
+                return OPTNULL(nodeptr);
             }
-            return parser_add_node(
-                this,
-                NT_TypeSpecification,
-                tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYPN_Array, .array_descr = { .array_of = type, .size = size } });
+            return OPTVAL(
+                nodeptr,
+                parser_add_node(
+                    this,
+                    NT_TypeSpecification,
+                    tokenlocation_merge(t.location, parser_location(this, type)),
+                    .type_specification = { .kind = TYPN_Array, .array_descr = { .array_of = type, .size = size } }));
         }
     }
 
-    token_t name = parser_check_token(this, lexer_accept_identifier(&this->lexer), "Expected type name");
-
+    opt_token_t name_maybe = lexer_accept_identifier(&this->lexer);
+    if (!name_maybe.ok) {
+        return OPTVAL(nodeptr, nullptr);
+    }
+    token_t  name = name_maybe.value;
     nodeptrs arguments = { 0 };
     if (lexer_accept_symbol(&this->lexer, '<')) {
         while (true) {
             if (lexer_accept_symbol(&this->lexer, '>')) {
                 break;
             }
-            nodeptr arg = parser_check_node(this, lexer_peek(&this->lexer).location, parse_type(this), "Expected template argument specification");
+            nodeptr arg = TRYOPT(nodeptr, parse_type(this));
+            if (!arg.ok) {
+                parser_error(this, t.location, "Expected template argument specification");
+                return OPTNULL(nodeptr);
+            }
             dynarr_append(&arguments, arg);
             if (lexer_accept_symbol(&this->lexer, '>')) {
                 break;
@@ -749,7 +809,7 @@ nodeptr parse_type(parser_t *this)
             lexerresult_t res = lexer_expect_symbol(&this->lexer, ',');
             if (!res.ok) {
                 parser_error(this, t.location, "Expected `,` or `>`");
-                return nullptr;
+                return OPTNULL(nodeptr);
             }
         }
     }
@@ -759,17 +819,20 @@ nodeptr parse_type(parser_t *this)
         tokenlocation_merge(t.location, parser_current_location(this)),
         .type_specification = { .kind = TYPN_Alias, .alias_descr = { .name = parser_text(this, name), .arguments = arguments } });
     if (lexer_accept_symbol(&this->lexer, '/')) {
-        nodeptr error_type = parse_type(this);
-        if (error_type.ok) {
-            return parser_add_node(
+        nodeptr error_type = TRYOPT(nodeptr, parse_type(this));
+        if (!error_type.ok) {
+            parser_error(this, t.location, "Expected error type after '/'");
+            return OPTNULL(nodeptr);
+        }
+        return OPTVAL(
+            nodeptr,
+            parser_add_node(
                 this,
                 NT_TypeSpecification,
                 tokenlocation_merge(t.location, parser_location(this, type)),
-                .type_specification = { .kind = TYPN_Result, .result_descr = { .success = type, .error = error_type } });
-        }
-        return nullptr;
+                .type_specification = { .kind = TYPN_Result, .result_descr = { .success = type, .error = error_type } }));
     }
-    return type;
+    return OPTVAL(nodeptr, type);
 }
 
 nodeptr parse_preprocess(parser_t *this, nodetype_t node_type)
@@ -824,7 +887,11 @@ nodeptr parse_enum(parser_t *this)
     token_t name = parser_expect_identifier(this, "Expected enum name");
     nodeptr underlying = { 0 };
     if (lexer_accept_symbol(&this->lexer, ':')) {
-        underlying = parser_check_node(this, parser_current_location(this), parse_type(this), "Expected underlying type after `:`");
+        opt_nodeptr type_maybe = parse_type(this);
+        if (!type_maybe.ok) {
+            return nullptr;
+        }
+        underlying = parser_check_node(this, parser_current_location(this), type_maybe.value, "Expected underlying type after `:`");
     }
     parser_expect_symbol(this, '{', NULL);
     nodeptrs enum_values = { 0 };
@@ -832,7 +899,11 @@ nodeptr parse_enum(parser_t *this)
         token_t label = parser_expect_identifier(this, "Expected enum value label");
         nodeptr payload = { 0 };
         if (lexer_accept_symbol(&this->lexer, '(')) {
-            payload = parser_check_node(this, parser_current_location(this), parse_type(this), "Expected enum value payload type");
+            opt_nodeptr type_maybe = parse_type(this);
+            if (!type_maybe.ok) {
+                return nullptr;
+            }
+            payload = parser_check_node(this, parser_current_location(this), type_maybe.value, "Expected enum value payload type");
             parser_expect_symbol(this, ')', "Expected `)` to close enum value payload type");
         }
         nodeptr value_node = { 0 };
@@ -867,18 +938,22 @@ nodeptr parse_enum(parser_t *this)
         .enumeration = { .name = parser_text(this, name), .underlying = underlying, .values = enum_values });
 }
 
+static opt_slice_t get_label(parser_t *this)
+{
+    opt_slice_t label = { 0 };
+    if (this->ctx.labels.len > 0) {
+        slice_t l = dynarr_popback(slice_t, &this->ctx.labels);
+        label = OPTVAL(slice_t, l);
+    }
+    return label;
+}
+
 nodeptr parse_for_statement(parser_t *this)
 {
-    opt_slice_t label;
-    if (lexer_has_lookback(&this->lexer, 2)
-        && token_matches_symbol(lexer_lookback(&this->lexer, 1), ':')
-        && token_matches(lexer_lookback(&this->lexer, 2), TK_Identifier)) {
-        label = OPTVAL(slice_t, parser_text(this, lexer_lookback(&this->lexer, 2)));
-    }
-    token_t for_token = lexer_lex(&this->lexer);
-
-    token_t var_name = parser_expect_identifier(this, "Expected `for` range variable name");
-    token_t t = lexer_peek(&this->lexer);
+    opt_slice_t label = get_label(this);
+    token_t     for_token = lexer_lex(&this->lexer);
+    token_t     var_name = parser_expect_identifier(this, "Expected `for` range variable name");
+    token_t     t = lexer_peek(&this->lexer);
     if (token_matches(t, TK_Identifier) && slice_eq(parser_text(this, t), C("in"))) {
         lexer_lex(&this->lexer);
     }
@@ -926,7 +1001,11 @@ nodeptr parse_func(parser_t *this)
         token_t param_name_tok = parser_expect_identifier(this, "Expected parameter name");
         slice_t param_name = parser_text(this, param_name_tok);
         parser_expect_symbol(this, ':', "Expected `:` in function parameter declaration");
-        nodeptr param_type = parser_check_node(this, parser_current_location(this), parse_type(this), "Expected parameter type");
+        opt_nodeptr type_maybe = parse_type(this);
+        if (!type_maybe.ok) {
+            return nullptr;
+        }
+        nodeptr param_type = parser_check_node(this, parser_current_location(this), type_maybe.value, "Expected parameter type");
         dynarr_append(
             &params,
             parser_add_node(
@@ -939,7 +1018,11 @@ nodeptr parse_func(parser_t *this)
         }
         parser_expect_symbol(this, ',', "Expected `,` or `)`");
     }
-    nodeptr return_type = parser_check_node(this, parser_current_location(this), parse_type(this), "Expected return type");
+    opt_nodeptr type_maybe = parse_type(this);
+    if (!type_maybe.ok) {
+        return nullptr;
+    }
+    nodeptr return_type = parser_check_node(this, parser_current_location(this), type_maybe.value, "Expected return type");
     nodeptr signature = parser_add_node(
         this,
         NT_Signature,
@@ -964,7 +1047,11 @@ nodeptr parse_func(parser_t *this)
             foreign_func_tok.location,
             .identifier = { .id = foreign_func });
     } else {
-        impl = parser_check_node(this, parser_current_location(this), parse_statement(this), "Could not parse function implementation");
+        impl = parser_check_node(
+            this,
+            parser_current_location(this),
+            parse_statement(this),
+            "Could not parse function implementation");
     }
     return parser_add_node(
         this,
@@ -976,11 +1063,22 @@ nodeptr parse_func(parser_t *this)
 nodeptr parse_if_statement(parser_t *this)
 {
     token_t if_token = lexer_lex(&this->lexer);
-    nodeptr condition = parser_check_node(this, parser_current_location(this), parse_expression(this, 0), "Error parsing `if` condition");
-    nodeptr if_branch = parser_check_node(this, parser_current_location(this), parse_statement(this), "Error parsing `if` branch");
+    nodeptr condition = parser_check_node(
+        this, parser_current_location(this),
+        parse_expression(this, 0),
+        "Error parsing `if` condition");
+    nodeptr if_branch = parser_check_node(
+        this,
+        parser_current_location(this),
+        parse_statement(this),
+        "Error parsing `if` branch");
     nodeptr else_branch = nullptr;
     if (lexer_accept_keyword(&this->lexer, KW_Else)) {
-        else_branch = parser_check_node(this, parser_current_location(this), parse_statement(this), "Error parsing `else` branch");
+        else_branch = parser_check_node(
+            this,
+            parser_current_location(this),
+            parse_statement(this),
+            "Error parsing `else` branch");
     }
     return parser_add_node(
         this,
@@ -1010,14 +1108,13 @@ nodeptr parse_import(parser_t *this)
 
 nodeptr parse_loop(parser_t *this)
 {
-    opt_slice_t label;
-    if (lexer_has_lookback(&this->lexer, 2)
-        && token_matches_symbol(lexer_lookback(&this->lexer, 1), ':')
-        && token_matches(lexer_lookback(&this->lexer, 2), TK_Identifier)) {
-        label = OPTVAL(slice_t, parser_text(this, lexer_lookback(&this->lexer, 2)));
-    }
-    token_t loop_token = lexer_lex(&this->lexer);
-    nodeptr stmt = parser_check_node(this, parser_current_location(this), parse_statement(this), "Error parsing `loop` block");
+    opt_slice_t label = get_label(this);
+    token_t     loop_token = lexer_lex(&this->lexer);
+    nodeptr     stmt = parser_check_node(
+        this,
+        parser_current_location(this),
+        parse_statement(this),
+        "Error parsing `loop` block");
     return parser_add_node(
         this,
         NT_LoopStatement,
@@ -1082,7 +1179,11 @@ nodeptr parse_struct(parser_t *this)
     while (!lexer_accept_symbol(&this->lexer, '}')) {
         token_t field_name_tok = parser_expect_identifier(this, "Expected field name");
         parser_expect_symbol(this, ':', NULL);
-        nodeptr type = parser_check_node(this, parser_current_location(this), parse_type(this), "Expected field type");
+        opt_nodeptr type_maybe = parse_type(this);
+        if (!type_maybe.ok) {
+            return nullptr;
+        }
+        nodeptr type = parser_check_node(this, parser_current_location(this), type_maybe.value, "Expected field type");
         dynarr_append(
             &fields,
             parser_add_node(
@@ -1102,24 +1203,14 @@ nodeptr parse_struct(parser_t *this)
         .structure = { .name = parser_text(this, name_tok), .fields = fields });
 }
 
-nodeptr parse_var_decl(parser_t *this)
+nodeptr parse_var_decl(parser_t *this, slice_t name, nodeptr type)
 {
-    lexer_t *lexer = &this->lexer;
-    assert(lexer_has_lookback(lexer, 1)
-        && token_matches_symbol(lexer_lookback(lexer, 1), ':')
-        && token_matches(lexer_lookback(lexer, 1), TK_Identifier));
-    bool            is_const = lexer_has_lookback(lexer, 2) && token_matches_keyword(lexer_lookback(lexer, 2), KW_Const);
-    token_t         name = lexer_lookback(lexer, 1);
+    lexer_t        *lexer = &this->lexer;
+    bool            is_const = this->ctx.is_const;
     token_t         token = lexer_peek(lexer);
-    nodeptr         type = nullptr;
-    tokenlocation_t location = lexer_lookback(lexer, is_const ? 2 : 1).location;
+    tokenlocation_t location = token.location;
     tokenlocation_t end_location = token.location;
-    if (token_matches(token, TK_Identifier)) {
-        type = parser_check_node(this, parser_current_location(this), parse_type(this), "Expected variable type");
-        end_location = parser_current_location(this);
-    }
-    token = lexer_peek(lexer);
-    nodeptr initializer = nullptr;
+    nodeptr         initializer = nullptr;
     if (token_matches_symbol(token, '=')) {
         lexer_lex(lexer);
         initializer = parser_check_node(this, parser_current_location(this), parse_expression(this, 0), "Error parsing initialization expression");
@@ -1134,20 +1225,15 @@ nodeptr parse_var_decl(parser_t *this)
         this,
         NT_VariableDeclaration,
         tokenlocation_merge(location, end_location),
-        .variable_declaration = { .name = parser_text(this, name), .type = type, .initializer = initializer });
+        .variable_declaration = { .is_const = is_const, .name = name, .type = type, .initializer = initializer });
 }
 
 nodeptr parse_while_statement(parser_t *this)
 {
-    opt_slice_t label = { 0 };
-    if (lexer_has_lookback(&this->lexer, 2)
-        && token_matches_symbol(lexer_lookback(&this->lexer, 1), ':')
-        && token_matches(lexer_lookback(&this->lexer, 2), TK_Identifier)) {
-        label = OPTVAL(slice_t, parser_text(this, lexer_lookback(&this->lexer, 2)));
-    }
-    token_t kw = lexer_lex(&this->lexer);
-    nodeptr condition = parser_check_node(this, parser_current_location(this), parse_expression(this, 0), "Error parsing `while` condition");
-    nodeptr stmt = parser_check_node(this, parser_current_location(this), parse_statement(this), "Error parsing `while` block");
+    opt_slice_t label = get_label(this);
+    token_t     kw = lexer_lex(&this->lexer);
+    nodeptr     condition = parser_check_node(this, parser_current_location(this), parse_expression(this, 0), "Error parsing `while` condition");
+    nodeptr     stmt = parser_check_node(this, parser_current_location(this), parse_statement(this), "Error parsing `while` block");
     return parser_add_node(
         this,
         NT_WhileStatement,

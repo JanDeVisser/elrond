@@ -465,6 +465,7 @@ arm64_var_pointer_t arm64_assign(arm64_function_t *f, size_t size)
     assert(e->type == VSE_VarPointer);
     arm64_var_pointer_t ptr = e->var_pointer;
     arm64_var_pointer_t ret = ptr;
+    dynarr_pop(&f->stack);
 
     // Pop the top of the value stack into x0...
     arm64_pop(f, size, 0);
@@ -503,14 +504,14 @@ void generate_default(arm64_function_t *f, operation_t *op)
 void generate_AssignFromRef(arm64_function_t *f, operation_t *op)
 {
     // arm64_stack.push_back(arm64_assign(impl.payload));
-    arm64_assign(f, op->AssignFromRef.value);
+    arm64_assign_by_type(f, op->AssignFromRef);
     // debug_stack(function, "AssignFromRef");
 }
 
 void generate_AssignValue(arm64_function_t *f, operation_t *op)
 {
     // arm64_stack.push_back(arm64_assign(impl.payload));
-    arm64_assign(f, op->AssignValue.value);
+    arm64_assign_by_type(f, op->AssignValue);
     // debug_stack(function, "AssignValue");
 }
 
@@ -894,12 +895,17 @@ bool arm64_save_and_assemble(arm64_object_t *o, ir_generator_t *gen)
     path_replace_extension(&o_file, C("o"));
     if (o->module.ok) {
         ir_node_t *mod = gen->ir_nodes.items + o->module.value;
-        fprintf(stderr, "[ARM64] Assembling `" SL "`\n", SLARG(mod->module.name));
+        if (cmdline_is_set("verbose")) {
+            fprintf(stderr, "[ARM64] Assembling `" SL "`\n", SLARG(mod->module.name));
+        }
     } else {
-        fprintf(stderr, "[ARM64] Assembling root module\n");
+        if (cmdline_is_set("verbose")) {
+            fprintf(stderr, "[ARM64] Assembling root module\n");
+        }
     }
 
-    process_t        as = process_create("as", path.path.items, "-o", o_file.path.items);
+    process_t as = process_create("as", path.path.items, "-o", o_file.path.items);
+    as.verbose = cmdline_is_set("verbose");
     process_result_t res = process_execute(&as);
     if (!res.ok) {
         fatal("Assembler execution failed: %s\n", strerror(errno));
@@ -945,7 +951,8 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
     }
 
     if (o_files.len != 0) {
-        process_t        p = process_create("xcrun", "--sdk", "macosx", "--show-sdk-path");
+        process_t p = process_create("xcrun", "--sdk", "macosx", "--show-sdk-path");
+        p.verbose = cmdline_is_set("verbose");
         process_result_t res = process_execute(&p);
         if (!res.ok) {
             fatal("`xcrun` execution failed: %s\n", strerror(errno));
@@ -957,8 +964,10 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
         sb_append_cstr(&sdk_path, "/usr/lib");
         path_t program_path = path_parse(prog->program.name);
         path_strip_extension(&program_path);
-        printf("[ARM64] Linking `" SL "`\n", SLARG(program_path.path));
-        printf("[ARM64] SDK path: `" SL "`\n", SLARG(sdk_path));
+        if (cmdline_is_set("verbose")) {
+            printf("[ARM64] Linking `" SL "`\n", SLARG(program_path.path));
+            printf("[ARM64] SDK path: `" SL "`\n", SLARG(sdk_path));
+        }
 
         process_t link = process_create(
             "ld",
@@ -980,6 +989,7 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
         for (size_t ix = 0; ix < o_files.len; ++ix) {
             dynarr_append(&link.arguments, o_files.items[ix]);
         }
+        link.verbose = cmdline_is_set("verbose");
 
         res = process_execute(&link);
         if (!res.ok) {
@@ -998,6 +1008,7 @@ bool arm64_executable_generate(arm64_executable_t *exe, ir_generator_t *gen)
             "build/libelrrt.dylib",
             "@executable_path/libelrrt.dylib",
             program_path.path.items);
+        install_tool.verbose = cmdline_is_set("verbose");
         res = process_execute(&install_tool);
         if (!res.ok) {
             fatal("Install tool execution failed: %s\n", strerror(errno));

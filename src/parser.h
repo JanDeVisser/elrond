@@ -12,13 +12,19 @@
 #ifndef __PARSER_H__
 #define __PARSER_H__
 
+typedef struct _parser_ctx {
+    bool     is_const;
+    slices_t labels;
+} parser_ctx_t;
+
 typedef struct _parser {
-    lexer_t   lexer;
-    nodes_t   nodes;
-    nodeptr   root;
-    nodeptrs  namespaces;
-    strings_t errors;
-    int       bound;
+    lexer_t      lexer;
+    nodes_t      nodes;
+    nodeptr      root;
+    nodeptrs     namespaces;
+    strings_t    errors;
+    int          bound;
+    parser_ctx_t ctx;
 } parser_t;
 
 parser_t        parse(slice_t name, slice_t text);

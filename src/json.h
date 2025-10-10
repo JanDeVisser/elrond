@@ -192,23 +192,23 @@ json_decode_error_t make_decode_error(token_t t, slice_t error)
 
 json_deserialize_result_t json_deserialize(json_t *json, lexer_t *lexer)
 {
-    token_t t = lexer_peek(lexer);
+    token_t      t = lexer_peek(lexer);
     json_value_t ret = { 0 };
     switch (t.kind) {
     case TK_Symbol:
         switch (t.symbol) {
         case '{': {
             lexer_lex(lexer);
-	    ret.type = JT_Object;
+            ret.type = JT_Object;
             while (!lexer_accept_symbol(lexer, '}')) {
                 lexerresult_t name_res = lexer_expect(lexer, TK_String);
                 if (!name_res.ok) {
                     return RESERR(json_deserialize_result_t,
                         make_decode_error(t, C("Expected object member name")));
                 }
-                sb_t name = { 0 };
-		slice_t s = lexer_token_text(lexer, name_res.success);
-                sb_unescape(&name, slice_sub(s, 1, s.len-1));
+                sb_t    name = { 0 };
+                slice_t s = lexer_token_text(lexer, name_res.success);
+                sb_unescape(&name, slice_sub(s, 1, s.len - 1));
                 if (!lexer_expect_symbol(lexer, ':').ok) {
                     return RESERR(json_deserialize_result_t,
                         make_decode_error(t, C("Expected `:`")));
@@ -228,7 +228,7 @@ json_deserialize_result_t json_deserialize(json_t *json, lexer_t *lexer)
         } break;
         case '[': {
             lexer_lex(lexer);
-	    ret.type = JT_Array;
+            ret.type = JT_Array;
             while (!lexer_accept_symbol(lexer, ']')) {
                 json_deserialize_result_t value_res = json_deserialize(json, lexer);
                 if (!value_res.ok) {
@@ -267,17 +267,17 @@ json_deserialize_result_t json_deserialize(json_t *json, lexer_t *lexer)
         break;
     case TK_String: {
         lexer_lex(lexer);
-        sb_t unescaped = { 0 };
-	slice_t s = lexer_token_text(lexer, t);
-	sb_unescape(&unescaped, slice_sub(s, 1, s.len-1));
-	ret = (json_value_t) { .type = JT_String, .string = sb_as_slice(unescaped) };
+        sb_t    unescaped = { 0 };
+        slice_t s = lexer_token_text(lexer, t);
+        sb_unescape(&unescaped, slice_sub(s, 1, s.len - 1));
+        ret = (json_value_t) { .type = JT_String, .string = sb_as_slice(unescaped) };
     } break;
     case TK_Number:
         lexer_lex(lexer);
         opt_long num = slice_to_long(lexer_token_text(lexer, t), 0);
         assert(num.ok);
         // TODO floating point numbers
-	ret = (json_value_t) { .type = JT_Number, .number = num.value };
+        ret = (json_value_t) { .type = JT_Number, .number = num.value };
         break;
     default:
         UNREACHABLE();
@@ -324,7 +324,7 @@ int main()
     sb_t   serialized = json_encode(json);
     assert(serialized.len > 0);
     assert(serialized.items[0] == '{');
-    assert(serialized.items[serialized.len-1] == '}');
+    assert(serialized.items[serialized.len - 1] == '}');
 }
 
 #endif /* JSON_TEST */

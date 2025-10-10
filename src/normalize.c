@@ -291,6 +291,24 @@ nodeptr String_normalize(parser_t *parser, nodeptr n)
     return parser_add_node(parser, NT_Constant, N(n)->location, .constant_value = OPTVAL(value_t, val));
 }
 
+nodeptr VariableDeclaration_normalize(parser_t *parser, nodeptr n)
+{
+    nodeptr initializer = nullptr;
+    if (N(n)->variable_declaration.initializer.ok) {
+        initializer = normalize(parser, N(n)->variable_declaration.initializer);
+    }
+    if (initializer.ok != N(n)->variable_declaration.initializer.ok || initializer.value != N(n)->variable_declaration.initializer.value) {
+        variable_declaration_t decl = N(n)->variable_declaration;
+        decl.initializer = initializer;
+        return parser_add_node(
+            parser,
+            NT_VariableDeclaration,
+            N(n)->location,
+            .variable_declaration = decl);
+    }
+    return n;
+}
+
 #define NORMALIZEOVERRIDES(S) \
     S(BinaryExpression)       \
     S(BoolConstant)           \
@@ -301,7 +319,8 @@ nodeptr String_normalize(parser_t *parser, nodeptr n)
     S(Program)                \
     S(Return)                 \
     S(StatementBlock)         \
-    S(String)
+    S(String)                 \
+    S(VariableDeclaration)
 
 static bool          normalize_initialized = false;
 static normalize_fnc normalize_fncs[] = {

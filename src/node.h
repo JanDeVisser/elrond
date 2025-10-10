@@ -215,6 +215,7 @@ typedef struct _unary_expression {
 } unary_expression_t;
 
 typedef struct _variable_declaration {
+    bool    is_const;
     slice_t name;
     nodeptr type;
     nodeptr initializer;

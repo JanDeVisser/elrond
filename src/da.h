@@ -35,6 +35,7 @@ typedef DA(char) sb_t;
 OPTDEF(sb_t);
 typedef DA(sb_t) strings_t;
 typedef DA(slice_t) slices_t;
+typedef DA(opt_slice_t) opt_slices_t;
 typedef DA(uint64_t) uint64s;
 typedef DA(nodeptr) nodeptrs;
 OPTDEF(nodeptrs);
@@ -93,6 +94,18 @@ OPTDEF(nodeptrs);
                 abort();                                                         \
             }                                                                    \
             (arr)->items + ((arr)->len - 1);                                     \
+        })
+
+#define dynarr_popback(T, arr)                                                   \
+    (                                                                            \
+        {                                                                        \
+            if ((arr)->len == 0) {                                               \
+                fprintf(stderr, "dynarr_back(): Out of bounds array access.\n"); \
+                abort();                                                         \
+            }                                                                    \
+            T __t = (arr)->items[(arr)->len - 1];                                \
+            --(arr)->len;                                                        \
+            __t;                                                                 \
         })
 
 #define dynarr_cmp(arr1, arr2)                                                            \

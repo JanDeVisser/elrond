@@ -54,6 +54,7 @@ typedef struct _process {
     pid_t              pid;
     slice_t            command;
     slices_t           arguments;
+    bool               verbose;
     write_pipe_t       in;
     read_pipes_t       out_pipes;
     opt_pipe_on_read_t on_stdout_read;
@@ -143,8 +144,7 @@ int read_pipe_connect(read_pipe_t *p, int fd)
 void read_pipe_connect_parent(read_pipe_t *p)
 {
     if (read_pipe_connect(p, p->pipe[PROCESS_PIPE_END_READ]) < 0) {
-        fprintf(stderr, "read_pipe_connect: %s\n", strerror(errno));
-        abort();
+        fatal("read_pipe_connect: %s\n", strerror(errno));
     }
     close(p->pipe[PROCESS_PIPE_END_WRITE]);
 }
@@ -195,8 +195,7 @@ void *read_pipes_read(void *arg)
         for (int ix = 0; ix < 2; ++ix) {
             if (poll_fd[ix].revents & POLLIN) {
                 if (read_pipes_drain(p, ix) < 0) {
-                    fprintf(stderr, "read_pipes_read: drain: %s\n", strerror(errno));
-                    abort();
+                    fatal("read_pipes_read: drain: %s\n", strerror(errno));
                 }
             }
             if (poll_fd[ix].revents & POLLHUP) {
@@ -219,8 +218,7 @@ void read_pipes_connect_parent(read_pipes_t *p)
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
     if ((errno = pthread_mutex_init(&p->mutex, &attr)) != 0) {
-        fprintf(stderr, "read_pipes_connect_parent: pthread_mutex_init: %s\n", strerror(errno));
-        abort();
+        fatal("read_pipes_connect_parent: pthread_mutex_init: %s\n", strerror(errno));
     }
     pthread_t thread;
     pthread_mutexattr_destroy(&attr);
@@ -229,8 +227,7 @@ void read_pipes_connect_parent(read_pipes_t *p)
              NULL,
              (threadproc_t) read_pipes_read, p))
         != 0) {
-        fprintf(stderr, "read_pipes_connect_parent: pthread_create: %s\n", strerror(errno));
-        abort();
+        fatal("read_pipes_connect_parent: pthread_create: %s\n", strerror(errno));
     }
     pthread_detach(thread);
 }
@@ -377,11 +374,13 @@ void _process_set_arguments(process_t *proc, ...)
 
 int process_start(process_t *proc)
 {
-    printf("[CMD] " SL, SLARG(proc->command));
-    for (size_t ix = 0; ix < proc->arguments.len; ++ix) {
-        printf(" " SL, SLARG(proc->arguments.items[ix]));
+    if (proc->verbose) {
+        printf("[CMD] " SL, SLARG(proc->command));
+        for (size_t ix = 0; ix < proc->arguments.len; ++ix) {
+            printf(" " SL, SLARG(proc->arguments.items[ix]));
+        }
+        printf("\n");
     }
-    printf("\n");
     signal(SIGCHLD, sigchld);
     size_t sz = proc->arguments.len;
     size_t bufsz = proc->command.len + 1;
@@ -423,8 +422,7 @@ int process_start(process_t *proc)
         read_pipes_connect_child(&proc->out_pipes, STDOUT_FILENO, STDERR_FILENO);
         assert(argv[0] != NULL);
         execvp(argv[0], (char *const *) argv);
-        fprintf(stderr, "execvp(" SL ") failed: %s\n", SLARG(proc->command), strerror(errno));
-        abort();
+        fatal("execvp(" SL ") failed: %s\n", SLARG(proc->command), strerror(errno));
     }
     write_pipe_connect_parent(&proc->in);
     read_pipes_connect_parent(&proc->out_pipes);

@@ -343,8 +343,8 @@ nodeptr Call_bind(parser_t *parser, nodeptr n)
             return parser_bind_error(
                 parser,
                 node->location,
-                "Type mismatch for parameter `" SL "` of function `" SL "`",
-                SLARG(N(node->function_call.arguments)->variable_declaration.name),
+                "Type mismatch for parameter %zu  of function `" SL "`",
+                ix,
                 SLARG(N(node->function_call.callable)->identifier.id)); // FIXME error message
         }
     }
@@ -472,21 +472,46 @@ nodeptr TypeSpecification_bind(parser_t *parser, nodeptr n)
     return typespec_resolve(N(n)->type_specification);
 }
 
-#define BINDOVERRIDES(S) \
-    S(BinaryExpression)  \
-    S(Call)              \
-    S(Comptime)          \
-    S(Constant)          \
-    S(ExpressionList)    \
-    S(ForeignFunction)   \
-    S(Function)          \
-    S(Identifier)        \
-    S(Module)            \
-    S(Parameter)         \
-    S(Program)           \
-    S(Return)            \
-    S(Signature)         \
-    S(StatementBlock)    \
+nodeptr VariableDeclaration_bind(parser_t *parser, nodeptr n)
+{
+    nodeptr init_type = nullptr;
+    if (N(n)->variable_declaration.initializer.ok) {
+        init_type = bind(parser, N(n)->variable_declaration.initializer);
+    }
+    nodeptr decl_type = nullptr;
+    if (N(n)->variable_declaration.type.ok) {
+        decl_type = bind(parser, N(n)->variable_declaration.type);
+    }
+    if (!init_type.ok && !decl_type.ok) {
+        return nullptr;
+    }
+    if (decl_type.ok && init_type.ok && decl_type.value != init_type.value) {
+        return parser_bind_error(
+            parser,
+            N(n)->location,
+            "Contradicting declared- and initializer types");
+    }
+    nodeptr type = (init_type.ok) ? init_type : decl_type;
+    parser_add_name(parser, N(n)->variable_declaration.name, type, n);
+    return type;
+}
+
+#define BINDOVERRIDES(S)   \
+    S(BinaryExpression)    \
+    S(Call)                \
+    S(Comptime)            \
+    S(Constant)            \
+    S(ExpressionList)      \
+    S(ForeignFunction)     \
+    S(Function)            \
+    S(Identifier)          \
+    S(Module)              \
+    S(Parameter)           \
+    S(Program)             \
+    S(Return)              \
+    S(Signature)           \
+    S(StatementBlock)      \
+    S(VariableDeclaration) \
     S(TypeSpecification)
 
 static bool     bind_initialized = false;

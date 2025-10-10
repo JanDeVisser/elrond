@@ -29,7 +29,8 @@
     S(Module)                \
     S(Program)               \
     S(Return)                \
-    S(StatementBlock)
+    S(StatementBlock)        \
+    S(VariableDeclaration)
 
 typedef void (*generate_fnc)(ir_generator_t *, nodeptr n);
 
@@ -622,6 +623,35 @@ void generate_StatementBlock(ir_generator_t *gen, nodeptr n)
     }
 }
 
+void generate_VariableDeclaration(ir_generator_t *gen, nodeptr n)
+{
+    node_t *node = GN(n);
+    generator_add_op(
+        gen,
+        DeclVar,
+        (name_t) { .name = node->variable_declaration.name, .type = node->bound_type });
+    if (node->variable_declaration.initializer.ok) {
+        generate(gen, node->variable_declaration.initializer);
+        nodeptr rhs_type = GN(node->variable_declaration.initializer)->bound_type;
+        nodeptr lhs_type = node->bound_type;
+        generator_add_op(
+            gen,
+            PushVarAddress,
+            (var_path_t) { .name = node->variable_declaration.name, .type = node->bound_type, .offset = 0 });
+        if (type_kind(rhs_type) == TYPK_ReferenceType) {
+            generator_add_op(gen, AssignFromRef, lhs_type);
+        } else {
+            generator_add_op(gen, AssignValue, lhs_type);
+        }
+    }
+    generator_add_op(
+        gen,
+        PushVarAddress,
+        (var_path_t) { .name = node->variable_declaration.name, .type = node->bound_type, .offset = 0 });
+    nodeptr value_type = type_value_type(node->bound_type);
+    generator_add_op(gen, Dereference, value_type);
+}
+
 /*
 template<>
 void generate_node(ir_generator_t * gen, std::shared_ptr<Break> const &node)
@@ -783,25 +813,6 @@ void generate_node(ir_generator_t * gen, std::shared_ptr<UnaryExpression> const 
 template<>
 void generate_node(ir_generator_t *, std::shared_ptr<TypeSpecification> const &)
 {
-}
-
-template<>
-void generate_node(ir_generator_t * gen, std::shared_ptr<VariableDeclaration> const &node)
-{
-    generator_add_op<DeclVar>(gen, IRVariableDeclaration { node->name, node->bound_type });
-    if (node->initializer) {
-        generator.generate(node->initializer);
-        auto &rhs_type { node->initializer->bound_type };
-        auto &lhs_type { node->bound_type };
-        generator_add_op<PushVarAddress>(gen, VarPath { node->name, node->bound_type, 0 });
-        if (rhs_type->kind() == TypeKind::ReferenceType) {
-            generator_add_op<AssignFromRef>(gen, lhs_type);
-        } else {
-            generator_add_op<AssignValue>(gen, lhs_type);
-        }
-    }
-    generator_add_op<PushVarAddress>(gen, VarPath { node->name, node->bound_type, 0 });
-    generator_add_op<Dereference>(gen, node->bound_type->value_type());
 }
 
 template<>
