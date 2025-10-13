@@ -37,6 +37,7 @@ typedef enum _type_kind {
 #define S(TK) TYPK_##TK,
     TYPEKINDS(S)
 #undef S
+        TYPK_MAX,
 } type_kind_t;
 
 typedef struct _array_type {

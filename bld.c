@@ -38,6 +38,7 @@ Nob_Cmd cmd = { 0 };
 #define APP_SOURCES(S) \
     S(elrond)          \
     S(arm64)           \
+    S(arm64_binop)     \
     S(generate)        \
     S(parser)          \
     S(operators)       \
@@ -64,7 +65,9 @@ Nob_Cmd cmd = { 0 };
 #define TEST_SOURCES(S) \
     S(01_helloworld)    \
     S(02_comptime)      \
-    S(03_binexp)
+    S(03_binexp)        \
+    S(04_variable)      \
+    S(05_add_variables)
 
 int format_sources()
 {

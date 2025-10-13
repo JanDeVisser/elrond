@@ -21,6 +21,7 @@
 
 #define GN(n) (parser_node((gen)->parser, (n)))
 #define GENERATEOVERRIDES(S) \
+    S(BinaryExpression)      \
     S(Call)                  \
     S(Constant)              \
     S(Function)              \
@@ -82,6 +83,14 @@ void operation_list(sb_t *sb, operation_t const *op)
     sb_printf(sb, "    " SL, SLARG(type_name));
     sb_printf(sb, "%*s", 15 - (int) type_name.len, "");
     switch (op->type) {
+    case IRO_BinaryOperator:
+        sb_printf(
+            sb,
+            SL " %s " SL,
+            SLARG(type_to_string(op->BinaryOperator.lhs)),
+            operator_name(op->BinaryOperator.op),
+            SLARG(type_to_string(op->BinaryOperator.rhs)));
+        break;
     case IRO_Break:
         sb_printf(sb, "scope_end %llu depth %llu label %llu exit_type %zu", op->Break.scope_end, op->Break.depth, op->Break.label, op->Break.exit_type.value);
         break;
@@ -101,6 +110,15 @@ void operation_list(sb_t *sb, operation_t const *op)
         break;
     case IRO_Pop:
         sb_printf(sb, SL, SLARG(type_to_string(op->Pop)));
+        break;
+    case IRO_PushVarAddress:
+        trace("%p %zu", op->PushVarAddress.name.items, op->PushVarAddress.name.len);
+        if (op->PushVarAddress.name.items == NULL) {
+            sb_append(sb, C("name null"));
+        } else {
+            sb_printf(sb, SL " + %lu", SLARG(op->PushVarAddress.name), op->PushVarAddress.offset);
+        }
+        break;
     default:
         break;
     }
@@ -251,60 +269,59 @@ void generate_default(ir_generator_t *gen, nodeptr n)
     trace("generate_node(%s)", node_type_name(GN(n)->node_type));
 }
 
-/*
-void generate_BinaryExpression(ir_generator_t *gen, node_t *node)
+void generate_BinaryExpression(ir_generator_t *gen, nodeptr n)
 {
-    nodeptr lhs = node->binary_expression.lhs;
-    nodeptr rhs = node->binary_expression.lhs;
-    nodeptr lhs_type = GN(lhs)->bound_type;
-    nodeptr       lhs_value_type = type_value_type(lhs_type);
+    node_t    *node = GN(n);
+    nodeptr    lhs = node->binary_expression.lhs;
+    nodeptr    rhs = node->binary_expression.rhs;
+    operator_t op = node->binary_expression.op;
+    nodeptr    lhs_type = GN(lhs)->bound_type;
+    nodeptr    lhs_value_type = type_value_type(lhs_type);
 
-    if (node->binary_expression.op == OP_MemberAccess) {
+    if (op == OP_MemberAccess) {
         generate(gen, lhs);
-        auto const &ref = std::get<ReferenceType>(lhs->bound_type->description);
-        auto        rhs_id = std::dynamic_pointer_cast<Identifier>(rhs);
-        auto const &s = std::get<StructType>(ref.referencing->description);
-        size_t      offset { 0 };
-        for (auto const &f : s.fields) {
-            offset = alignat(offset, f.type->align_of());
-            if (f.name == rhs_id->identifier) {
+        type_t *lhs_type_ptr = get_type(lhs_type);
+        type_t *s = get_type(lhs_type_ptr->referencing);
+        size_t  offset = 0;
+        dynarr_foreach(struct_field_t, fld, &s->struct_fields)
+        {
+            offset = align_at(type_align_of(fld->type), offset);
+            if (slice_eq(fld->name, GN(rhs)->identifier.id)) {
                 break;
             }
-            offset += f.type->size_of();
+            offset += type_size_of(fld->type);
         }
-        Operation &operation = last_op(generator);
-        auto      &push_var_address = std::get<Operation::PushVarAddress>(operation.op);
-        push_var_address.payload.type = node->bound_type;
-        push_var_address.payload.offset += offset;
+        operation_t *operation = last_op(gen);
+        operation->PushVarAddress.type = node->bound_type;
+        operation->PushVarAddress.offset += offset;
         return;
     }
 
-    auto const &rhs_type { rhs->bound_type };
-    auto        rhs_value_type { rhs_type->value_type() };
+    nodeptr rhs_type = GN(rhs)->bound_type;
+    nodeptr rhs_value_type = type_value_type(rhs_type);
 
-    if (node->op == Operator::Assign) {
-        generator.generate(node->rhs);
-        generator.generate(node->lhs);
-        if (rhs_type->kind() == TypeKind::ReferenceType) {
-            generator_add_op<AssignFromRef>(gen, lhs_value_type);
+    if (op == OP_Assign) {
+        generate(gen, rhs);
+        generate(gen, lhs);
+        if (type_kind(rhs_type) == TYPK_ReferenceType) {
+            generator_add_op(gen, AssignFromRef, lhs_value_type);
         } else {
-            generator_add_op<AssignValue>(gen, lhs_value_type);
+            generator_add_op(gen, AssignValue, lhs_value_type);
         }
-        generator.generate(node->lhs);
-        generator_add_op<Dereference>(gen, lhs_value_type);
+        generate(gen, lhs);
+        generator_add_op(gen, Dereference, lhs_value_type);
         return;
     }
-    generator.generate(node->lhs);
-    if (lhs_type != lhs_value_type) {
-        generator_add_op<Dereference>(gen, lhs_value_type);
+    generate(gen, lhs);
+    if (lhs_type.value != lhs_value_type.value) {
+        generator_add_op(gen, Dereference, lhs_value_type);
     }
-    generator.generate(node->rhs);
-    if (rhs_type != rhs_value_type) {
-        generator_add_op<Dereference>(gen, rhs_value_type);
+    generate(gen, rhs);
+    if (rhs_type.value != rhs_value_type.value) {
+        generator_add_op(gen, Dereference, rhs_value_type);
     }
-    generator_add_op<BinaryOperator>(gen, Operation::BinaryOperator { lhs_value_type, node->op, rhs_value_type });
+    generator_add_op(gen, BinaryOperator, (binary_op_t) { .lhs = lhs_value_type, .op = op, .rhs = rhs_value_type });
 }
-*/
 
 void generate_Call(ir_generator_t *gen, nodeptr n)
 {

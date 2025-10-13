@@ -97,7 +97,7 @@ void                        arm64_function_generate(arm64_function_t *f, ir_gene
 void                        arm64_function_write(arm64_function_t *func, FILE *file);
 
 #define pop_value(T, f, target) (arm64_pop((f), sizeof(T), (target)))
-#define push_value(T, f) (arm64_push((f), sizeof(T))
+#define push_value(T, f) (arm64_push((f), sizeof(T)))
 
 typedef struct _arm64_object {
     slice_t           file_name;
@@ -118,6 +118,7 @@ void arm64_object_generate(arm64_object_t *o, ir_generator_t *gen);
 bool arm64_save_and_assemble(arm64_object_t *o, ir_generator_t *gen);
 void arm64_add_data(arm64_object_t *o, slice_t label, bool global, slice_t type, bool is_static, slice_t data);
 void arm64_object_write(arm64_object_t *o, FILE *f);
+void arm64_binop(arm64_function_t *f, nodeptr lhs, operator_t op, nodeptr rhs);
 
 typedef struct _arm64_executable {
     nodeptr         program;

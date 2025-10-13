@@ -121,8 +121,7 @@ void arm64_add_comment(arm64_function_t *f, slice_t comment)
     if (comment.len == 0) {
         return;
     }
-    arm64_add_text(f, "\n; " SL "\n", SLARG(comment));
-    sb_append_char(f->sections + f->active, '\n');
+    arm64_add_text(f, "; " SL "\n", SLARG(comment));
     opt_size_t nl = slice_indexof(comment, '\n');
     while (nl.ok) {
         slice_t line = slice_trim(slice_first(comment, nl.value));
@@ -163,7 +162,7 @@ void arm64_analyze(arm64_function_t *f, ir_generator_t *gen, operations_t *opera
             for (size_t iix = 0; iix < op->ScopeBegin.len; ++iix) {
                 name_t *name = op->ScopeBegin.items + iix;
                 depth += align_at(16, type_size_of(name->type));
-                dynarr_append_s(arm64_variable_t, &f->variables, .name = name->name, .depth = depth)
+                dynarr_append_s(arm64_variable_t, &f->variables, .name = name->name, .depth = depth);
             }
             f->stack_depth = MAX(f->stack_depth, depth);
             break;
@@ -519,7 +518,7 @@ void generate_BinaryOperator(arm64_function_t *f, operation_t *op)
 {
     (void) f;
     (void) op;
-    // generate_binop(function, impl.payload.lhs, impl.payload.op, impl.payload.rhs);
+    arm64_binop(f, op->BinaryOperator.lhs, op->BinaryOperator.op, op->BinaryOperator.rhs);
 }
 
 void generate_Break(arm64_function_t *f, operation_t *op)
@@ -705,7 +704,13 @@ void generate_ScopeBegin(arm64_function_t *f, operation_t *op)
 {
     (void) op;
     (void) f;
-    //    f->save_regs |= 3 << 19;
+    dynarr_foreach(arm64_variable_t, var, &f->variables)
+    {
+        int cp = temp_save();
+        arm64_add_comment(f, C(temp_sprintf(SL "@%llu", SLARG(var->name), var->depth)));
+        temp_rewind(cp);
+    }
+    f->save_regs |= 3 << 19;
     //    arm64_add_instruction(f, C("mov"), "x19,xzr");
     //    arm64_add_instruction(f, C("mov"), "x20,xzr");
 }
@@ -747,6 +752,7 @@ void arm64_function_generate(arm64_function_t *f, ir_generator_t *gen, operation
         sb_t         list = { 0 };
         operation_list(&list, op);
         trace("Serializing op #%zu " SL, ix, SLARG(list));
+        arm64_add_comment(f, sb_as_slice(list));
         switch (op->type) {
 #undef S
 #define S(T, P)              \
