@@ -66,12 +66,17 @@ operator_bind_map_t operator_bind_map[] = {
     { .op = OP_Add, .lhs = { .kind = OPK_Type, .type = OPTVAL(size_t, IX_StringBuilder) }, .rhs = Pseudo_Lhs, .result = Pseudo_Lhs },
     { .op = OP_Add, .lhs = Operand_Type(StringBuilder), .rhs = Operand_Type(String), .result = Pseudo_Lhs },
     { .op = OP_Divide, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Pseudo_Lhs },
+    { .op = OP_Equals, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
+    { .op = OP_Equals, .lhs = Operand_Type(Boolean), .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
     { .op = OP_Greater, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
     { .op = OP_GreaterEqual, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
     { .op = OP_Less, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
     { .op = OP_LessEqual, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
+    { .op = OP_Modulo, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Pseudo_Lhs },
     { .op = OP_Multiply, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Pseudo_Lhs },
     { .op = OP_Multiply, .lhs = Operand_Type(StringBuilder), .rhs = Pseudo_Int, .result = Pseudo_Lhs },
+    { .op = OP_NotEqual, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
+    { .op = OP_NotEqual, .lhs = Operand_Type(Boolean), .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
     { .op = OP_Subtract, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Pseudo_Lhs },
 };
 #define BIND_MAP_SIZE (sizeof(operator_bind_map) / sizeof(operator_bind_map_t))
@@ -442,6 +447,38 @@ nodeptr Identifier_bind(parser_t *parser, nodeptr n)
     return nullptr;
 }
 
+nodeptr IfStatement_bind(parser_t *parser, nodeptr n)
+{
+    nodeptr cond_type = bind(parser, N(n)->if_statement.condition);
+    if (type_value_type(cond_type).value != Boolean.value) {
+        return parser_bind_error(
+            parser,
+            N(n)->location,
+            "`if` condition must be a boolean value");
+    }
+    nodeptr if_type = bind(parser, N(n)->if_statement.if_branch);
+    nodeptr if_value_type = type_value_type(if_type);
+    nodeptr else_type = nullptr;
+    nodeptr else_value_type = nullptr;
+    if (N(n)->if_statement.else_branch.ok) {
+        else_type = bind(parser, N(n)->if_statement.else_branch);
+        else_value_type = type_value_type(else_type);
+        if (type_kind(if_type) != TYPK_VoidType) {
+            if (if_value_type.value == else_value_type.value) {
+                return if_value_type;
+            } else if (type_kind(else_type) != TYPK_VoidType) {
+                return result_of(if_value_type, else_value_type);
+            }
+            return optional_of(if_value_type);
+        }
+        if (type_kind(else_type) != TYPK_VoidType) {
+            return optional_of(else_value_type);
+        }
+        return Void;
+    }
+    return if_value_type;
+}
+
 nodeptr Module_bind(parser_t *parser, nodeptr n)
 {
     // TODO Module type should be type of last non-function stmt
@@ -523,13 +560,13 @@ nodeptr WhileStatement_bind(parser_t *parser, nodeptr n)
 {
     nodeptr cond_type = bind(parser, N(n)->while_statement.condition);
     nodeptr stmt_type = bind(parser, N(n)->while_statement.statement);
-    if (type_kind(cond_type) != TYPK_BoolType) {
+    if (type_value_type(cond_type).value != Boolean.value) {
         return parser_bind_error(
             parser,
             N(n)->location,
-            "While-loop condition must be a boolean value");
+            "`while` condition must be a boolean value");
     }
-    return stmt_type;
+    return type_value_type(stmt_type);
 }
 
 #define BINDOVERRIDES(S)   \
@@ -541,6 +578,7 @@ nodeptr WhileStatement_bind(parser_t *parser, nodeptr n)
     S(ForeignFunction)     \
     S(Function)            \
     S(Identifier)          \
+    S(IfStatement)         \
     S(Module)              \
     S(Parameter)           \
     S(Program)             \

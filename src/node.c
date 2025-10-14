@@ -171,6 +171,16 @@ void Identifier_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
     sb_printf(sb, SL "\n", SLARG(n->identifier.id));
 }
 
+void IfStatement_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
+{
+    sb_append_char(sb, '\n');
+    node_to_string(sb, "Cond", tree, n->if_statement.condition, indent + 4);
+    node_to_string(sb, "If", tree, n->if_statement.if_branch, indent + 4);
+    if (n->if_statement.else_branch.ok) {
+        node_to_string(sb, "Else", tree, n->if_statement.else_branch, indent + 4);
+    }
+}
+
 void Module_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
 {
     sb_printf(sb, SL "\n", SLARG(n->module.name));
@@ -279,6 +289,7 @@ void WhileStatement_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
     S(EnumValue)           \
     S(ExpressionList)      \
     S(ForeignFunction)     \
+    S(IfStatement)         \
     S(Module)              \
     S(Number)              \
     S(Parameter)           \

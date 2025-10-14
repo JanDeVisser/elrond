@@ -190,6 +190,26 @@ nodeptr Function_normalize(parser_t *parser, nodeptr n)
     return n;
 }
 
+nodeptr IfStatement_normalize(parser_t *parser, nodeptr n)
+{
+    nodeptr cond = normalize(parser, N(n)->if_statement.condition);
+    nodeptr if_branch = normalize(parser, N(n)->if_statement.if_branch);
+    nodeptr else_branch = nullptr;
+    if (N(n)->if_statement.else_branch.ok) {
+        else_branch = normalize(parser, N(n)->if_statement.else_branch);
+    }
+    if (cond.value != N(n)->if_statement.condition.value
+        || if_branch.value != N(n)->if_statement.if_branch.value
+        || else_branch.value != N(n)->if_statement.else_branch.value) {
+        return parser_add_node(
+            parser,
+            NT_IfStatement,
+            N(n)->location,
+            .if_statement = { .condition = cond, .if_branch = if_branch, .else_branch = else_branch });
+    }
+    return n;
+}
+
 opt_nodeptrs normalize_block(parser_t *parser, nodeptr n, off_t offset)
 {
     nodeptrs new_block = { 0 };
@@ -328,6 +348,7 @@ nodeptr WhileStatement_normalize(parser_t *parser, nodeptr n)
     S(BoolConstant)           \
     S(Comptime)               \
     S(Function)               \
+    S(IfStatement)            \
     S(Module)                 \
     S(Number)                 \
     S(Program)                \

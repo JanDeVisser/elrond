@@ -54,6 +54,7 @@ Nob_Cmd cmd = { 0 };
     S(execute)
 
 #define RT_SOURCES(S) \
+    S(divzero)        \
     S(endln)          \
     S(puthex)         \
     S(puti)           \
@@ -69,7 +70,9 @@ Nob_Cmd cmd = { 0 };
     S(04_variable)      \
     S(05_add_variables) \
     S(06_assignment)    \
-    S(07_while)
+    S(07_while)         \
+    S(08_modulo)        \
+    S(09_if_else)
 
 int format_sources()
 {

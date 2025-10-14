@@ -27,6 +27,7 @@
     S(Function)              \
     S(Module)                \
     S(Identifier)            \
+    S(IfStatement)           \
     S(Module)                \
     S(Program)               \
     S(Return)                \
@@ -418,6 +419,27 @@ void generate_Identifier(ir_generator_t *gen, nodeptr n)
     generator_add_op(gen, PushVarAddress, (var_path_t) { .name = node->identifier.id, .type = node->bound_type, .offset = 0 });
 }
 
+void generate_IfStatement(ir_generator_t *gen, nodeptr n)
+{
+    node_t *node = GN(n);
+    generate(gen, node->if_statement.condition);
+    nodeptr cond_type = GN(node->while_statement.condition)->bound_type;
+    nodeptr value_type = type_value_type(cond_type);
+    if (value_type.value != cond_type.value) {
+        generator_add_op(gen, Dereference, value_type);
+    }
+    int else_label = next_label();
+    int done_label = next_label();
+    generator_add_op(gen, JumpF, else_label);
+    generate(gen, node->if_statement.if_branch);
+    generator_add_op(gen, Jump, done_label);
+    generator_add_op(gen, Label, else_label);
+    if (node->if_statement.else_branch.ok) {
+        generate(gen, node->if_statement.else_branch);
+    }
+    generator_add_op(gen, Label, done_label);
+}
+
 void generate_Module(ir_generator_t *gen, nodeptr n)
 {
     node_t *node = GN(n);
@@ -805,27 +827,6 @@ void generate_node(ir_generator_t * gen, std::shared_ptr<Enum> const &node)
 }
 
 template<>
-void generate_node(ir_generator_t * gen, std::shared_ptr<IfStatement> const &node)
-{
-    generator.generate(node->condition);
-    if (auto value_type = node->condition->bound_type->value_type(); node->condition->bound_type != value_type) {
-        generator_add_op<Dereference>(gen, value_type);
-    }
-    auto const else_label = next_label();
-    auto const done_label = next_label();
-    generator_add_op<JumpF>(gen, else_label);
-    generator.generate(node->if_branch);
-    generator_add_op<Jump>(gen, done_label);
-    generator_add_op<Label>(gen, else_label);
-    if (node->else_branch) {
-        generator.generate(node->else_branch);
-    } else {
-        generator_add_op<PushConstant>(gen, make_void());
-    }
-    generator_add_op<Label>(gen, done_label);
-}
-
-template<>
 void generate_node(ir_generator_t * gen, std::shared_ptr<LoopStatement> const &node)
 {
     generator_add_op<PushConstant>(gen, make_value(node->statement->bound_type));
@@ -857,16 +858,6 @@ void generate_node(ir_generator_t * gen, std::shared_ptr<UnaryExpression> const 
         generator_add_op<Dereference>(gen, value_type);
     }
     generator_add_op<UnaryOperator>(gen, Operation::UnaryOperator { node->operand->bound_type, node->op });
-}
-
-template<>
-void generate_node(ir_generator_t *, std::shared_ptr<TypeSpecification> const &)
-{
-}
-
-template<>
-void generate_node(ir_generator_t * gen, std::shared_ptr<WhileStatement> const &node)
-{
 }
 */
 

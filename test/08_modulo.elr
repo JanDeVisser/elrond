@@ -1,0 +1,18 @@
+func putln(s: string) void -> "elrond$putln"
+func puts(s: string) void -> "elrond$puts"
+func puti(i: i32) void -> "elrond$puti"
+func putb(b: boolean) void -> "elrond$puti"
+func endln() void -> "elrond$endln"
+
+func main() i32
+{
+        x := 7::i32;
+	putb((x % 2::i32) == 0::i32);
+	endln()
+	putb((x % 2::i32) == 1::i32);
+	endln()
+	putb((x % 0::i32) == 1::i32);
+	endln()
+	return 0::i32
+}
+

@@ -146,7 +146,9 @@ void gen_uint_Divide(arm64_function_t *f, nodeptr lhs, nodeptr rhs)
     pop_value(int64_t, f, 1);
     arm64_add_text(f,
         "    cmp     x1,xzr\n"
-        "    b.eq    _$divide_by_zero\n");
+        "    b.ne    1f\n"
+        "    b       _$divide_by_zero\n"
+        "1:\n");
     pop_value(int64_t, f, 0);
     arm64_add_instruction_param(f, C("udiv"), C("x0,x0,x1"));
     push_value(int64_t, f);
@@ -158,8 +160,10 @@ void gen_int_Modulo(arm64_function_t *f, nodeptr lhs, nodeptr rhs)
     (void) rhs;
     pop_value(int64_t, f, 1);
     arm64_add_text(f,
-        "    cmp      x1,xzr\n"
-        "    b.eq     _$divide_by_zero\n");
+        "    cmp     x1,xzr\n"
+        "    b.ne    1f\n"
+        "    b       _$divide_by_zero\n"
+        "1:\n");
     pop_value(int64_t, f, 0);
     arm64_add_text(f,
         "    sdiv     x2,x0,x1\n"
