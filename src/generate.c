@@ -31,7 +31,8 @@
     S(Program)               \
     S(Return)                \
     S(StatementBlock)        \
-    S(VariableDeclaration)
+    S(VariableDeclaration)   \
+    S(WhileStatement)
 
 typedef void (*generate_fnc)(ir_generator_t *, nodeptr n);
 
@@ -669,6 +670,37 @@ void generate_VariableDeclaration(ir_generator_t *gen, nodeptr n)
     generator_add_op(gen, Dereference, value_type);
 }
 
+void generate_WhileStatement(ir_generator_t *gen, nodeptr n)
+{
+    node_t *node = GN(n);
+    nodeptr stmt_type = GN(node->while_statement.statement)->bound_type;
+    nodeptr stmt_value_type = type_value_type(stmt_type);
+    generator_add_op(gen, PushConstant, (value_t) { .type = stmt_value_type });
+    ir_context_t ld = (ir_context_t) {
+        .ir_node = gen->ctxs.items[gen->ctxs.len - 1].ir_node,
+        .unwind_type = USET_Loop,
+        .loop = (loop_descriptor_t) {
+            .name = ORELSE(slice_t, node->while_statement.label, C("")),
+            .loop_begin = next_label(),
+            .loop_end = next_label(),
+        },
+    };
+    dynarr_append(&gen->ctxs, ld);
+    generator_add_op(gen, Label, ld.loop.loop_begin);
+    generate(gen, node->while_statement.condition);
+    nodeptr cond_type = GN(node->while_statement.condition)->bound_type;
+    nodeptr value_type = type_value_type(cond_type);
+    if (value_type.value != cond_type.value) {
+        generator_add_op(gen, Dereference, value_type);
+    }
+    generator_add_op(gen, JumpF, ld.loop.loop_end);
+    generator_add_op(gen, Discard, GN(node->while_statement.statement)->bound_type);
+    generate(gen, node->while_statement.statement);
+    generator_add_op(gen, Jump, ld.loop.loop_begin);
+    generator_add_op(gen, Label, ld.loop.loop_end);
+    dynarr_pop(&gen->ctxs);
+}
+
 /*
 template<>
 void generate_node(ir_generator_t * gen, std::shared_ptr<Break> const &node)
@@ -835,20 +867,6 @@ void generate_node(ir_generator_t *, std::shared_ptr<TypeSpecification> const &)
 template<>
 void generate_node(ir_generator_t * gen, std::shared_ptr<WhileStatement> const &node)
 {
-    generator_add_op<PushConstant>(gen, make_value(node->statement->bound_type->value_type()));
-    Context::LoopDescriptor const ld { node->label.value_or(std::wstring {}), next_label(), next_label() };
-    generator.ctxs.push_back(Context { {}, ld });
-    generator_add_op<Label>(gen, ld.loop_begin);
-    generator.generate(node->condition);
-    if (auto value_type = node->condition->bound_type->value_type(); node->condition->bound_type != value_type) {
-        generator_add_op<Dereference>(gen, value_type);
-    }
-    generator_add_op<JumpF>(gen, ld.loop_end);
-    generator_add_op<Discard>(gen, node->statement->bound_type);
-    generator.generate(node->statement);
-    generator_add_op<Jump>(gen, ld.loop_begin);
-    generator_add_op<Label>(gen, ld.loop_end);
-    generator.ctxs.pop_back();
 }
 */
 

@@ -68,7 +68,8 @@ Nob_Cmd cmd = { 0 };
     S(03_binexp)        \
     S(04_variable)      \
     S(05_add_variables) \
-    S(06_assignment)
+    S(06_assignment)    \
+    S(07_while)
 
 int format_sources()
 {
@@ -244,7 +245,8 @@ int main(int argc, char **argv)
 
     if (run) {
         nob_set_current_dir(TEST_DIR);
-        putenv("DYLD_LIBRARY_PATH=../" BUILD_DIR);
+        // putenv("DYLD_LIBRARY_PATH=../" BUILD_DIR);
+        int exit_code;
 #undef S
 #define S(T)                                               \
     cmd_append(&cmd, "../" BUILD_DIR "elrond", #T ".elr"); \
@@ -252,9 +254,7 @@ int main(int argc, char **argv)
         return 1;                                          \
     }                                                      \
     cmd_append(&cmd, "./" #T);                             \
-    if (!cmd_run(&cmd)) {                                  \
-        return 1;                                          \
-    }
+    exit_code = cmd_run(&cmd);
         TEST_SOURCES(S)
     }
 

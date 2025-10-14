@@ -64,6 +64,8 @@ void gen_int_Negate(arm64_function_t *function, nodeptr lhs, nodeptr rhs)
     {                                                                    \
         (void) lhs;                                                      \
         (void) rhs;                                                      \
+        pop_value(int64_t, f, 1);                                        \
+        pop_value(int64_t, f, 0);                                        \
         arm64_add_text(f,                                                \
             "    cmp     x0,x1\n"                                        \
             "    %s      1f\n"                                           \
