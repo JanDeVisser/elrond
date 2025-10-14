@@ -255,31 +255,42 @@ void VariableDeclaration_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
     }
 }
 
-#define PRINTOVERRIDES(S) \
-    S(BinaryExpression)   \
-    S(BoolConstant)       \
-    S(Break)              \
-    S(Call)               \
-    S(Comptime)           \
-    S(Constant)           \
-    S(Continue)           \
-    S(Defer)              \
-    S(Embed)              \
-    S(Enum)               \
-    S(EnumValue)          \
-    S(ExpressionList)     \
-    S(ForeignFunction)    \
-    S(Module)             \
-    S(Number)             \
-    S(Parameter)          \
-    S(Program)            \
-    S(Return)             \
-    S(Function)           \
-    S(Identifier)         \
-    S(Signature)          \
-    S(StatementBlock)     \
-    S(String)             \
-    S(VariableDeclaration)
+void WhileStatement_print(sb_t *sb, nodes_t tree, node_t *n, int indent)
+{
+    if (n->while_statement.label.ok) {
+        sb_append(sb, n->while_statement.label.value);
+    }
+    sb_append_char(sb, '\n');
+    node_to_string(sb, "Cond", tree, n->while_statement.condition, indent + 4);
+    node_to_string(sb, "Block", tree, n->while_statement.statement, indent + 4);
+}
+
+#define PRINTOVERRIDES(S)  \
+    S(BinaryExpression)    \
+    S(BoolConstant)        \
+    S(Break)               \
+    S(Call)                \
+    S(Comptime)            \
+    S(Constant)            \
+    S(Continue)            \
+    S(Defer)               \
+    S(Embed)               \
+    S(Enum)                \
+    S(EnumValue)           \
+    S(ExpressionList)      \
+    S(ForeignFunction)     \
+    S(Module)              \
+    S(Number)              \
+    S(Parameter)           \
+    S(Program)             \
+    S(Return)              \
+    S(Function)            \
+    S(Identifier)          \
+    S(Signature)           \
+    S(StatementBlock)      \
+    S(String)              \
+    S(VariableDeclaration) \
+    S(WhileStatement)
 
 typedef void (*print_fnc)(sb_t *, nodes_t, node_t *, int);
 

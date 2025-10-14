@@ -66,6 +66,10 @@ operator_bind_map_t operator_bind_map[] = {
     { .op = OP_Add, .lhs = { .kind = OPK_Type, .type = OPTVAL(size_t, IX_StringBuilder) }, .rhs = Pseudo_Lhs, .result = Pseudo_Lhs },
     { .op = OP_Add, .lhs = Operand_Type(StringBuilder), .rhs = Operand_Type(String), .result = Pseudo_Lhs },
     { .op = OP_Divide, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Pseudo_Lhs },
+    { .op = OP_Greater, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
+    { .op = OP_GreaterEqual, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
+    { .op = OP_Less, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
+    { .op = OP_LessEqual, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Operand_Type(Boolean) },
     { .op = OP_Multiply, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Pseudo_Lhs },
     { .op = OP_Multiply, .lhs = Operand_Type(StringBuilder), .rhs = Pseudo_Int, .result = Pseudo_Lhs },
     { .op = OP_Subtract, .lhs = Pseudo_Number, .rhs = Pseudo_Lhs, .result = Pseudo_Lhs },
@@ -221,7 +225,7 @@ nodeptr BinaryExpression_bind(parser_t *parser, nodeptr n)
                 SLARG(type_to_string(lhs_value_type)));
         }
         N(n)->bound_type = lhs_type;
-        return n;
+        return lhs_type;
     }
 
     if (op == OP_Cast) {
@@ -339,7 +343,9 @@ nodeptr Call_bind(parser_t *parser, nodeptr n)
     assert(args->kind == TYPK_TypeList);
     size_t ix;
     for (ix = 0; ix < MIN(args->type_list_types.len, sig->signature_type.parameters.len); ++ix) {
-        if (args->type_list_types.items[ix].value != sig->signature_type.parameters.items[ix].value) {
+        nodeptr param_type = type_value_type(sig->signature_type.parameters.items[ix]);
+        nodeptr arg_type = type_value_type(args->type_list_types.items[ix]);
+        if (param_type.value != arg_type.value) {
             return parser_bind_error(
                 parser,
                 node->location,
@@ -406,11 +412,14 @@ nodeptr Function_bind(parser_t *parser, nodeptr n)
     assert(sig_type->kind == TYPK_Signature);
     nodeptr result_type = sig_type->signature_type.result;
     if (impl->node_type != NT_ForeignFunction) {
-        if (impl->bound_type.value != result_type.value) {
+        if ((impl->bound_type.value != result_type.value)
+            && ((type_kind(impl->bound_type) != TYPK_ReferenceType)
+                || (type_value_type(impl->bound_type).value != result_type.value))) {
             return parser_bind_error(
                 parser,
                 node->location,
-                "Contradicting result types");
+                "Contradicting result types for function " SL ": declared result type is " SL ", but returned type is " SL,
+                SLARG(N(n)->function.name), SLARG(type_to_string(result_type)), SLARG(type_to_string(impl->bound_type)));
         }
     }
     return sig;
@@ -421,7 +430,14 @@ nodeptr Identifier_bind(parser_t *parser, nodeptr n)
     opt_name_t name = parser_resolve(parser, N(n)->identifier.id);
     if (name.ok) {
         N(n)->identifier.declaration = name.value.declaration;
-        return name.value.type;
+        nodeptr t = name.value.type;
+        switch (type_kind(t)) {
+        case TYPK_ReferenceType:
+        case TYPK_Signature:
+            return t;
+        default:
+            return referencing(t);
+        }
     }
     return nullptr;
 }
@@ -496,6 +512,26 @@ nodeptr VariableDeclaration_bind(parser_t *parser, nodeptr n)
     return type;
 }
 
+nodeptr Void_bind(parser_t *parser, nodeptr n)
+{
+    (void) parser;
+    (void) n;
+    return Void;
+}
+
+nodeptr WhileStatement_bind(parser_t *parser, nodeptr n)
+{
+    nodeptr cond_type = bind(parser, N(n)->while_statement.condition);
+    nodeptr stmt_type = bind(parser, N(n)->while_statement.statement);
+    if (type_kind(cond_type) != TYPK_BoolType) {
+        return parser_bind_error(
+            parser,
+            N(n)->location,
+            "While-loop condition must be a boolean value");
+    }
+    return stmt_type;
+}
+
 #define BINDOVERRIDES(S)   \
     S(BinaryExpression)    \
     S(Call)                \
@@ -511,8 +547,10 @@ nodeptr VariableDeclaration_bind(parser_t *parser, nodeptr n)
     S(Return)              \
     S(Signature)           \
     S(StatementBlock)      \
+    S(TypeSpecification)   \
     S(VariableDeclaration) \
-    S(TypeSpecification)
+    S(Void)                \
+    S(WhileStatement)
 
 static bool     bind_initialized = false;
 static bind_fnc bind_fncs[] = {

@@ -223,6 +223,6 @@ void     type_registry_init();
                 __v = get_type(__v)->referencing;          \
             }                                              \
             __v;                                           \
-        });
+        })
 
 #endif /* __TYPE_H__ */

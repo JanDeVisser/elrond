@@ -67,7 +67,8 @@ Nob_Cmd cmd = { 0 };
     S(02_comptime)      \
     S(03_binexp)        \
     S(04_variable)      \
-    S(05_add_variables)
+    S(05_add_variables) \
+    S(06_assignment)
 
 int format_sources()
 {

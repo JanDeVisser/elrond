@@ -309,6 +309,20 @@ nodeptr VariableDeclaration_normalize(parser_t *parser, nodeptr n)
     return n;
 }
 
+nodeptr WhileStatement_normalize(parser_t *parser, nodeptr n)
+{
+    nodeptr cond = normalize(parser, N(n)->while_statement.condition);
+    nodeptr stmt = normalize(parser, N(n)->while_statement.statement);
+    if (cond.value != N(n)->while_statement.condition.value || stmt.value != N(n)->while_statement.statement.value) {
+        return parser_add_node(
+            parser,
+            NT_WhileStatement,
+            N(n)->location,
+            .while_statement = { .condition = cond, .statement = stmt, .label = N(n)->while_statement.label });
+    }
+    return n;
+}
+
 #define NORMALIZEOVERRIDES(S) \
     S(BinaryExpression)       \
     S(BoolConstant)           \
@@ -320,7 +334,8 @@ nodeptr VariableDeclaration_normalize(parser_t *parser, nodeptr n)
     S(Return)                 \
     S(StatementBlock)         \
     S(String)                 \
-    S(VariableDeclaration)
+    S(VariableDeclaration)    \
+    S(WhileStatement)
 
 static bool          normalize_initialized = false;
 static normalize_fnc normalize_fncs[] = {
