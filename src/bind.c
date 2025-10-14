@@ -405,19 +405,25 @@ nodeptr Function_bind(parser_t *parser, nodeptr n)
 {
     nodeptr sig = bind(parser, N(n)->function.signature);
     node_t *node = N(n);
+    type_t *sig_type = get_type(sig);
     if (!node->namespace.ok) {
         parser_add_name(parser, node->function.name, sig, n);
         node->namespace.ok = true;
         dynarr_append(&parser->namespaces, n);
+        for (size_t ix = 0; ix < sig_type->signature_type.parameters.len; ++ix) {
+            node_t *param = N(N(N(n)->function.signature)->signature.parameters.items[ix]);
+            parser_add_name(parser, param->variable_declaration.name, sig_type->signature_type.parameters.items[ix], n);
+        }
     }
     bind(parser, node->function.implementation);
+    sig_type = get_type(sig);
     node = N(n);
     node_t *impl = N(node->function.implementation);
-    type_t *sig_type = get_type(sig);
+    trace("-> " SL " %d %d %d", SLARG(type_to_string(sig)), type_kind(sig), TYPK_Signature, sig_type->kind);
     assert(sig_type->kind == TYPK_Signature);
     nodeptr result_type = sig_type->signature_type.result;
     if (impl->node_type != NT_ForeignFunction) {
-        if ((impl->bound_type.value != result_type.value)
+        if ((get_type(impl->bound_type) != get_type(result_type))
             && ((type_kind(impl->bound_type) != TYPK_ReferenceType)
                 || (type_value_type(impl->bound_type).value != result_type.value))) {
             return parser_bind_error(

@@ -1,0 +1,26 @@
+func putln(s: string) void -> "elrond$putln"
+func puts(s: string) void -> "elrond$puts"
+func puti(i: i32) void -> "elrond$puti"
+func puti64(i: i64) void -> "elrond$puti"
+func endln() void -> "elrond$endln"
+
+func odd_even(i: i64) void
+{
+	if (i % 2) == 0 {
+		puts(" even")
+	} else {
+		puts(" odd")
+	}
+}
+
+func main() i32
+{
+	x := 0
+	while x < 10 {
+		puti64(x)
+		odd_even(x)
+		endln()
+		x = x + 1
+	}
+	return 0::i32
+}

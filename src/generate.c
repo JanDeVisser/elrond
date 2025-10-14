@@ -369,7 +369,7 @@ void generate_Function(ir_generator_t *gen, nodeptr n)
     if (GN(node->function.implementation)->node_type != NT_ForeignFunction) {
         namespace_t params = { 0 };
         node_t     *sig = GN(node->function.signature);
-        for (size_t ix = 0; sig->signature.parameters.len; ++ix) {
+        for (size_t ix = 0; ix < sig->signature.parameters.len; ++ix) {
             node_t *param = GN(sig->signature.parameters.items[ix]);
             dynarr_append_s(
                 name_t,

@@ -13,6 +13,7 @@
 #include "slice.h"
 
 #define TYPEKINDS(S) \
+    S(InvalidType)   \
     S(AliasType)     \
     S(ArrayType)     \
     S(BoolType)      \
@@ -155,26 +156,28 @@ FLOATWIDTHS(S)
 INTWIDTHS(S)
 #undef S
 
-#define IX_F32 0
-#define IX_F64 1
-#define IX_U8 2
-#define IX_I8 3
-#define IX_U16 4
-#define IX_I16 5
-#define IX_U32 6
-#define IX_I32 7
-#define IX_U64 8
-#define IX_I64 9
-#define IX_Boolean 10
-#define IX_String 11
-#define IX_StringBuilder 12
-#define IX_CString 13
-#define IX_Character 14
-#define IX_Pointer 15
-#define IX_Null 16
-#define IX_Void 17
-#define IX_VoidFnc 18
+#define IX_Invalid 0
+#define IX_F32 1
+#define IX_F64 2
+#define IX_U8 3
+#define IX_I8 4
+#define IX_U16 5
+#define IX_I16 6
+#define IX_U32 7
+#define IX_I32 8
+#define IX_U64 9
+#define IX_I64 10
+#define IX_Boolean 11
+#define IX_String 12
+#define IX_StringBuilder 13
+#define IX_CString 14
+#define IX_Character 15
+#define IX_Pointer 16
+#define IX_Null 17
+#define IX_Void 18
+#define IX_VoidFnc 19
 
+extern nodeptr Invalid;
 extern nodeptr Boolean;
 extern nodeptr String;
 extern nodeptr StringBuilder;

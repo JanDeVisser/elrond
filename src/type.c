@@ -30,6 +30,7 @@ static type_vtable_t vtables[] = {
 #undef S
 };
 
+nodeptr Invalid = OPTVAL(size_t, IX_Invalid);
 nodeptr F32 = OPTVAL(size_t, IX_F32);
 nodeptr F64 = OPTVAL(size_t, IX_F64);
 nodeptr U8 = OPTVAL(size_t, IX_U8);
@@ -93,6 +94,26 @@ typedef struct _type_name {
 
 static DA(type_t) type_registry = { 0 };
 static DA(type_name_t) type_by_name = { 0 };
+
+/* ------------------------------------------------------------------------ */
+
+slice_t InvalidType_to_string(type_t *t)
+{
+    (void) t;
+    return C("NULL (INVALID) TYPE");
+}
+
+intptr_t InvalidType_size_of(type_t *t)
+{
+    (void) t;
+    return 0;
+}
+
+intptr_t InvalidType_align_of(type_t *t)
+{
+    (void) t;
+    return 0;
+}
 
 /* ------------------------------------------------------------------------ */
 
@@ -752,6 +773,7 @@ void type_registry_init()
         dynarr_append(&type_by_name, ((type_name_t) { .name = C(#N), .type = (T) })); \
     }
 #undef S
+    MAKE_INTERNAL(Invalid, invalid, TYPK_InvalidType);
 #define S(W) MAKE_INTERNAL(F##W, f##W, TYPK_FloatType, .float_width = FW_##W);
     FLOATWIDTHS(S)
 #undef S
